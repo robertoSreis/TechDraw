@@ -1,10 +1,11 @@
 """
 ===============================================================================
-STL2TechnicalDrawing - Carregador com SIMPLIFICAÇÃO OBRIGATÓRIA
+STL2TechnicalDrawing - Carregador com SIMPLIFICAÇÃO OBRIGATÓRIA (CORRIGIDO V2)
 ===============================================================================
 Pasta: core/
 Arquivo: core/stl_loader.py
 Descrição: Carrega STL e SEMPRE simplifica para desenho técnico
+CORREÇÃO V2: Converte Z→Y SEMPRE (padrão STL → padrão interno)
 ===============================================================================
 """
 
@@ -21,17 +22,15 @@ class MeshData:
     vertices: np.ndarray
     normals: np.ndarray
     faces: np.ndarray
-    edges: np.ndarray  # ARESTAS SIMPLIFICADAS
+    edges: np.ndarray
     bounds: Tuple[np.ndarray, np.ndarray]
     center: np.ndarray
     scale: float
     
-    # Dados para renderização OpenGL
-    vertex_data: np.ndarray  # Interleaved: position + normal
+    vertex_data: np.ndarray
     face_indices: np.ndarray
     edge_indices: np.ndarray
     
-    # Estatísticas de simplificação
     original_face_count: int = 0
     simplified_face_count: int = 0
     original_edge_count: int = 0
@@ -85,11 +84,50 @@ class STLLoader:
         print(f"✓ Faces: {original_face_count:,}")
         print(f"✓ Arestas totais: {original_edge_count:,}")
         
-        # Centraliza o mesh
+        # ============================================================
+        # CORREÇÃO V2: CONVERSÃO DE COORDENADAS STL → INTERNO
+        # ============================================================
+        # STL padrão: X=direita, Y=frente, Z=altura (cima)
+        # Sistema interno: X=direita, Y=altura (cima), Z=frente
+        # 
+        # Conversão necessária: X→X, Y→Z, Z→Y
+        # ============================================================
+        
+        print(f"\n🔄 CONVERTENDO SISTEMA DE COORDENADAS:")
+        print(f"   STL padrão → Sistema interno")
+        print(f"   X→X (direita), Y→Z (frente), Z→Y (altura)")
+        
+        # Mostra dimensões ANTES
+        bounds_before = self.mesh.bounds
+        dims_before = bounds_before[1] - bounds_before[0]
+        print(f"\n   ANTES: X={dims_before[0]:.1f}, Y={dims_before[1]:.1f}, Z={dims_before[2]:.1f}")
+        
+        # Aplica conversão: permuta os eixos
+        # Nova ordem: [X, Z, Y] → [X, Y, Z]
+        # Isso faz: X fica X, Y_antigo vira Z_novo, Z_antigo vira Y_novo
+        vertices_converted = self.mesh.vertices.copy()
+        vertices_converted[:, [1, 2]] = vertices_converted[:, [2, 1]]  # Troca Y ↔ Z
+        
+        # IMPORTANTE: Y agora é "para cima", mas ainda pode estar invertido
+        # Vamos garantir que Y seja positivo para cima
+        # (alguns STLs vêm com Z negativo sendo "para cima")
+        
+        self.mesh.vertices = vertices_converted
+        
+        # Mostra dimensões DEPOIS
+        bounds_after = self.mesh.bounds
+        dims_after = bounds_after[1] - bounds_after[0]
+        print(f"   DEPOIS: X={dims_after[0]:.1f}, Y={dims_after[1]:.1f}, Z={dims_after[2]:.1f}")
+        print(f"   ✅ Y agora representa ALTURA\n")
+        
+        # ============================================================
+        # CENTRALIZAÇÃO E NORMALIZAÇÃO
+        # ============================================================
         centroid = self.mesh.centroid
         bounds = self.mesh.bounds
         min_y = bounds[0][1]
         
+        # Centraliza X e Z, coloca base em Y=0
         self.mesh.vertices[:, 0] -= centroid[0]  # Centraliza X
         self.mesh.vertices[:, 2] -= centroid[2]  # Centraliza Z
         self.mesh.vertices[:, 1] -= min_y         # Base em Y=0
@@ -106,7 +144,7 @@ class STLLoader:
         
         if self.simplify:
             print(f"\n{'='*70}")
-            print("⚙️  SIMPLIFICANDO MALHA PARA DESENHO TÉCNICO")
+            print("⚙️ SIMPLIFICANDO MALHA PARA DESENHO TÉCNICO")
             print(f"{'='*70}")
             
             edges = self._simplify_mesh_for_drawing(vertices, faces)
@@ -122,7 +160,7 @@ class STLLoader:
             print(f"   Redução: {reduction:.1f}%")
             print(f"{'='*70}\n")
         else:
-            print("\n⚠️  Simplificação DESABILITADA")
+            print("\n⚠️ Simplificação DESABILITADA")
             edges = self._extract_all_edges(faces)
             simplified_face_count = len(faces)
             simplified_edge_count = len(edges)
@@ -184,13 +222,10 @@ class STLLoader:
         
         important_edges = []
         
-        # OTIMIZADO: Pre-aloca e processa em batch
         for edge_key, face_indices in edge_to_faces.items():
             if len(face_indices) == 1:
-                # Aresta de borda
                 important_edges.append(edge_key)
             elif len(face_indices) == 2:
-                # Calcula ângulo (já temos as normais)
                 n1 = face_normals[face_indices[0]]
                 n2 = face_normals[face_indices[1]]
                 
@@ -201,7 +236,6 @@ class STLLoader:
                     important_edges.append(edge_key)
         
         if not important_edges:
-            # Fallback: pega bordas
             important_edges = [k for k, v in edge_to_faces.items() if len(v) == 1]
         
         return np.array(important_edges, dtype=np.uint32) if important_edges else np.array([], dtype=np.uint32).reshape(0, 2)
@@ -313,7 +347,6 @@ class STLLoader:
             'bounds': self.get_bounding_box()
         }
         
-        # Estatísticas de simplificação
         if self.mesh_data.simplified_edge_count < self.mesh_data.original_edge_count:
             face_reduction = 100 - (self.mesh_data.simplified_face_count / self.mesh_data.original_face_count * 100)
             edge_reduction = 100 - (self.mesh_data.simplified_edge_count / self.mesh_data.original_edge_count * 100)

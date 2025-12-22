@@ -1,15 +1,16 @@
 """
 ===============================================================================
-STL2TechnicalDrawing - Janela de Preview com Progresso Real
+STL2TechnicalDrawing - Janela de Preview com IMPRESSÃO
 ===============================================================================
 Pasta: gui/
 Arquivo: gui/drawing_preview_window.py
-Descrição: Janela de preview com progresso sincronizado
+Descrição: Janela de preview com progresso sincronizado e IMPRESSÃO
 ===============================================================================
 """
 
 import sys
 import os
+import tempfile
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from typing import Dict, Optional
@@ -20,8 +21,9 @@ from PyQt6.QtWidgets import (
     QScrollArea, QFrame, QSizePolicy, QComboBox,
     QSpinBox
 )
-from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal
-from PyQt6.QtGui import QAction
+from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal,QPoint
+from PyQt6.QtGui import QAction, QImage, QPainter, QPageSize,QPageLayout,QRegion
+from PyQt6.QtPrintSupport import QPrintDialog, QPrinter
 
 from gui.technical_drawing_widget import TechnicalDrawingWidget
 from core.projection_engine import ProjectionEngine, ViewType, ProjectedView
@@ -65,7 +67,6 @@ class ProjectionWorker(QThread):
             total_views = len(view_types)
             
             for i, view_type in enumerate(view_types):
-                # ADICIONE ESTE PRINT
                 print(f"📊 Gerando vista {i+1}/{total_views}: {view_type.value}")
                 
                 view = projection_engine.project_view(view_type)
@@ -79,10 +80,7 @@ class ProjectionWorker(QThread):
                     f"Processando vista {view_name}"
                 )
                 
-                view = projection_engine.project_view(view_type)
-                views[view_type] = view
-                
-                self.msleep(50)  # Pequena pausa para visualização
+                self.msleep(50)
             
             self.progress.emit(85, "Calculando dimensões...", "Analisando bounding box")
             real_dims = projection_engine.get_bounding_dimensions()
@@ -108,7 +106,7 @@ class DrawingPreviewWindow(QMainWindow):
         self.mesh_data = mesh_data
         self.views: Dict[ViewType, ProjectedView] = {}
         self.worker: Optional[ProjectionWorker] = None
-        self.progress_dialog = None  # QProgressDialog criado quando necessário
+        self.progress_dialog = None
         
         self.setWindowTitle("Desenho Técnico - Preview")
         self.setMinimumSize(1000, 700)
@@ -235,7 +233,25 @@ class DrawingPreviewWindow(QMainWindow):
         res_layout.addWidget(self.spin_dpi)
         export_layout.addLayout(res_layout)
         
-        self.btn_export = QPushButton("Exportar Desenho")
+        # ==========================================
+        # NOVO: Botão de IMPRIMIR
+        # ==========================================
+        self.btn_print = QPushButton("🖨️ Imprimir")
+        self.btn_print.setStyleSheet("""
+            QPushButton {
+                background-color: #6c757d;
+                color: white;
+                font-weight: bold;
+                padding: 8px;
+            }
+            QPushButton:hover {
+                background-color: #5a6268;
+            }
+        """)
+        self.btn_print.clicked.connect(self._print_drawing)
+        export_layout.addWidget(self.btn_print)
+        
+        self.btn_export = QPushButton("💾 Exportar Desenho")
         self.btn_export.setStyleSheet("""
             QPushButton {
                 background-color: #4CAF50;
@@ -281,7 +297,12 @@ class DrawingPreviewWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        export = QAction("Exportar", self)
+        # Ação de imprimir na toolbar
+        print_action = QAction("🖨️ Imprimir", self)
+        print_action.triggered.connect(self._print_drawing)
+        toolbar.addAction(print_action)
+        
+        export = QAction("💾 Exportar", self)
         export.triggered.connect(self._export_drawing)
         toolbar.addAction(export)
     
@@ -296,7 +317,6 @@ class DrawingPreviewWindow(QMainWindow):
         from PyQt6.QtWidgets import QProgressDialog
         from PyQt6.QtCore import Qt
         
-        # Usa QProgressDialog padrão com botão cancelar
         self.progress_dialog = QProgressDialog(
             "Gerando projeções...",
             "Cancelar",
@@ -310,7 +330,6 @@ class DrawingPreviewWindow(QMainWindow):
         self.progress_dialog.setAutoClose(False)
         self.progress_dialog.setAutoReset(False)
         
-        # Conecta cancelamento
         self.progress_dialog.canceled.connect(self._on_projection_canceled)
         
         self.worker = ProjectionWorker(self.mesh_data)
@@ -335,18 +354,15 @@ class DrawingPreviewWindow(QMainWindow):
         if self.worker and self.worker.isRunning():
             self.statusbar.showMessage("Cancelando geração...")
             
-            # Termina a thread
             self.worker.terminate()
-            self.worker.wait(2000)  # Aguarda até 2 segundos
+            self.worker.wait(2000)
             
-            # Se ainda estiver rodando, força
             if self.worker.isRunning():
                 self.worker.quit()
                 self.worker.wait()
             
             self.statusbar.showMessage("Geração cancelada pelo usuário")
             
-            # Fecha a janela de preview se não houver vistas
             if not self.views:
                 QMessageBox.information(
                     self,
@@ -387,7 +403,6 @@ class DrawingPreviewWindow(QMainWindow):
         QMessageBox.critical(self, "Erro", f"Erro ao gerar projeções:\n{error_msg}")
         self.statusbar.showMessage("❌ Erro na geração")
         
-        # Fecha a janela se não houver vistas
         if not self.views:
             self.close()
     
@@ -426,6 +441,93 @@ class DrawingPreviewWindow(QMainWindow):
         self.drawing_widget.setMinimumSize(new_w, new_h)
         self.drawing_widget.resize(new_w, new_h)
     
+    # ==========================================
+    # NOVA FUNÇÃO: IMPRESSÃO
+    # ==========================================
+    def _print_drawing(self):
+        """Imprime o desenho técnico usando o diálogo do Windows"""
+        if not self.views:
+            QMessageBox.warning(self, "Aviso", "Nenhum desenho para imprimir.")
+            return
+
+        try:
+            self.statusbar.showMessage("Preparando impressão...")
+            
+            # Cria o printer
+            printer = QPrinter(QPrinter.PrinterMode.HighResolution)
+            printer.setPageSize(QPageSize(QPageSize.PageSizeId.A4))
+            
+            # Configura orientação paisagem
+            from PyQt6.QtGui import QPageLayout
+            printer.setPageOrientation(QPageLayout.Orientation.Landscape)
+            
+            # Abre diálogo de impressão do Windows
+            dialog = QPrintDialog(printer, self)
+            dialog.setWindowTitle("Imprimir Desenho Técnico")
+            
+            if dialog.exec() == QPrintDialog.DialogCode.Accepted:
+                self.statusbar.showMessage("Imprimindo...")
+                
+                # Renderiza o desenho diretamente no printer
+                painter = QPainter()
+                if painter.begin(printer):
+                    # Pega o tamanho da página em pixels (margens já descontadas)
+                    page_rect = printer.pageRect(QPrinter.Unit.DevicePixel)
+                    page_width = page_rect.width()
+                    page_height = page_rect.height()
+                    
+                    # Tamanho do desenho
+                    drawing_width = self.drawing_widget.width()
+                    drawing_height = self.drawing_widget.height()
+                    
+                    # Calcula proporção para preencher a página mantendo aspect ratio
+                    width_ratio = page_width / drawing_width
+                    height_ratio = page_height / drawing_height
+                    scale_ratio = min(width_ratio, height_ratio) * 0.9  # 90% da página (margem)
+                    
+                    # Calcula nova posição centralizada
+                    new_width = drawing_width * scale_ratio
+                    new_height = drawing_height * scale_ratio
+                    x_offset = (page_width - new_width) / 2
+                    y_offset = (page_height - new_height) / 2
+                    
+                    # Configura transformação: translada e escala
+                    painter.translate(x_offset, y_offset)
+                    painter.scale(scale_ratio, scale_ratio)
+                    
+                    # Renderiza o desenho na origem (0,0) após transformação
+                    from PyQt6.QtGui import QRegion
+                    source_region = QRegion(self.drawing_widget.rect())
+                    
+                    self.drawing_widget.render(
+                        painter,
+                        QPoint(0, 0),  # Renderiza na origem após transformação
+                        source_region
+                    )
+                    
+                    painter.end()
+                    
+                    self.statusbar.showMessage("✓ Impressão enviada com sucesso!")
+                    
+                    QMessageBox.information(
+                        self,
+                        "Impressão Enviada",
+                        f"Desenho técnico impresso com escala {scale_ratio:.2f}:1\n"
+                        f"Original: {drawing_width}x{drawing_height}px\n"
+                        f"Na página: {int(new_width)}x{int(new_height)}px"
+                    )
+                else:
+                    raise Exception("Não foi possível iniciar o painter")
+            else:
+                self.statusbar.showMessage("Impressão cancelada")
+                
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Erro na Impressão",
+                f"Erro ao imprimir desenho:\n{str(e)}"
+            )
+            self.statusbar.showMessage("❌ Erro na impressão")
     def _export_drawing(self):
         """Exporta o desenho técnico para arquivo"""
         format_type = self.combo_format.currentText().lower()
