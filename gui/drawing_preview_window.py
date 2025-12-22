@@ -141,7 +141,7 @@ class DrawingPreviewWindow(QMainWindow):
         control_panel.setMaximumWidth(280)
         control_panel.setMinimumWidth(220)
         control_layout = QVBoxLayout(control_panel)
-        control_layout.setContentsMargins(5, 5, 5, 5)
+        control_layout.setContentsMargins(2, 2, 2, 2)
         control_layout.setSpacing(10)
         
         info_group = QGroupBox("Informações do Modelo")
@@ -242,7 +242,7 @@ class DrawingPreviewWindow(QMainWindow):
                 background-color: #6c757d;
                 color: white;
                 font-weight: bold;
-                padding: 8px;
+                padding: 3px;
             }
             QPushButton:hover {
                 background-color: #5a6268;
@@ -257,7 +257,7 @@ class DrawingPreviewWindow(QMainWindow):
                 background-color: #4CAF50;
                 color: white;
                 font-weight: bold;
-                padding: 10px;
+                padding: 3px;
             }
             QPushButton:hover {
                 background-color: #45a049;
@@ -278,7 +278,7 @@ class DrawingPreviewWindow(QMainWindow):
     def _setup_toolbar(self):
         """Configura a barra de ferramentas"""
         toolbar = QToolBar("Ferramentas")
-        toolbar.setIconSize(QSize(24, 24))
+        toolbar.setIconSize(QSize(20, 20))
         self.addToolBar(toolbar)
         
         zoom_in = QAction("Zoom +", self)
@@ -298,13 +298,13 @@ class DrawingPreviewWindow(QMainWindow):
         toolbar.addSeparator()
         
         # Ação de imprimir na toolbar
-        print_action = QAction("🖨️ Imprimir", self)
-        print_action.triggered.connect(self._print_drawing)
-        toolbar.addAction(print_action)
+        #print_action = QAction("🖨️ Imprimir", self)
+        #print_action.triggered.connect(self._print_drawing)
+        #toolbar.addAction(print_action)
         
-        export = QAction("💾 Exportar", self)
-        export.triggered.connect(self._export_drawing)
-        toolbar.addAction(export)
+        #export = QAction("💾 Exportar", self)
+        #export.triggered.connect(self._export_drawing)
+        #toolbar.addAction(export)
     
     def _setup_statusbar(self):
         """Configura a barra de status"""

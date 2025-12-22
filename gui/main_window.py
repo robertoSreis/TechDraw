@@ -22,7 +22,7 @@ from PyQt6.QtWidgets import (
     QToolBox, QScrollArea
 )
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QAction, QKeySequence
+from PyQt6.QtGui import QAction, QKeySequence,QIcon
 
 from gui.gl_widget import GLWidget
 from core.stl_loader import STLLoader, MeshData
@@ -86,6 +86,13 @@ class MainWindow(QMainWindow):
         self.setMinimumSize(1000, 700)
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
         self.setAcceptDrops(True)
+        # Configura ícone da janela
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "icon.ico")
+        if os.path.exists(icon_path):
+            from PyQt6.QtGui import QIcon
+            self.setWindowIcon(QIcon(icon_path))
+        else:
+            print(f"Aviso: Arquivo de ícone não encontrado: {icon_path}")
         
         self._setup_ui()
         self._setup_menu()
