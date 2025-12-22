@@ -63,6 +63,7 @@ $NUITKA_OPTIONS = @(
     "--remove-output",
     "--follow-imports",
     "--enable-plugin=pyqt6",
+    "--include-qt-plugins=qml",
     "--output-dir=$DIST_DIR",
     "--assume-yes-for-downloads"
 )
@@ -94,8 +95,6 @@ $NUITKA_OPTIONS += @(
 # Incluir diretórios de dados
 $NUITKA_OPTIONS += @(
     "--include-data-dir=gui=gui",
-    "--include-data-dir=core=core",
-    "--include-data-dir=utils=utils",
     "--include-package-data=PyQt6"
 )
 
