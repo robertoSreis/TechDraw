@@ -1,0 +1,25 @@
+# ============================================================================
+# STL2TechnicalDrawing - Dependências
+# ============================================================================
+# Instalar com: pip install -r requirements.txt
+# ============================================================================
+
+# Interface gráfica
+PyQt6>=6.4.0
+
+# OpenGL
+PyOpenGL>=3.1.6
+PyOpenGL-accelerate>=3.1.6
+
+# Processamento numérico
+numpy>=1.24.0
+
+# Processamento de STL
+numpy-stl>=3.0.0
+trimesh>=4.0.0
+
+# Cálculos geométricos
+scipy>=1.10.0
+
+# Processamento de imagens
+Pillow>=10.0.0
