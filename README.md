@@ -1,6 +1,8 @@
 <div align="center">
 
-# 🔧 STL2TechnicalDrawing
+# 🔧 TECHDRAW - STL 
+
+#TECHDRAW - STL É O NOME CURTO PARA O APLICATIVO STL2TechnicalDrawing
 
 ### Gerador Automático de Desenhos Técnicos a partir de Arquivos STL
 
