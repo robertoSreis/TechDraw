@@ -27,6 +27,22 @@
 
 **STL2TechnicalDrawing** é uma aplicação desktop poderosa e intuitiva que converte automaticamente modelos 3D em arquivos STL para desenhos técnicos profissionais com projeções ortográficas, dimensionamento automático e exportação em alta resolução.
 
+#### 🌍 Supported Languages (12 languages)
+
+- **Portuguese (Brazil)** - `PT-BR` (Original)
+- **English (United States)** - `EN-US` 
+- **Spanish** - `ES`
+- **Russian** - `RU`
+- **Chinese (Simplified)** - `ZH-CN`
+- **Japanese** - `JA`
+- **French** - `FR`
+- **German** - `DE`
+- **Polish** - `PL`
+- **Italian** - `IT`
+- **Korean** - `KO`
+- **Hindi** - `HI`
+
+Contributions for additional languages are welcome!
 #### ✨ Principais Funcionalidades
 
 - 🎯 **Visualização 3D Interativa**: Navegação completa com rotação, zoom e pan
