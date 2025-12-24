@@ -1,11 +1,10 @@
 """
 ===============================================================================
-STL2TechnicalDrawing - Carregador com SIMPLIFICAÇÃO OBRIGATÓRIA (CORRIGIDO V2)
+STL2TechnicalDrawing - Carregador com EIXO Y CORRIGIDO (NÃO INVERTE)
 ===============================================================================
 Pasta: core/
 Arquivo: core/stl_loader.py
-Descrição: Carrega STL e SEMPRE simplifica para desenho técnico
-CORREÇÃO V2: Converte Z→Y SEMPRE (padrão STL → padrão interno)
+Descrição: Carrega STL convertendo Z→Y SEM INVERTER o eixo
 ===============================================================================
 """
 
@@ -53,12 +52,6 @@ class STLLoader:
     def load(self, filepath: str) -> MeshData:
         """
         Carrega um arquivo STL e processa para renderização
-        
-        Args:
-            filepath: Caminho do arquivo STL
-            
-        Returns:
-            MeshData com arestas SIMPLIFICADAS
         """
         self.filepath = filepath
         
@@ -85,14 +78,8 @@ class STLLoader:
         print(f"✓ Arestas totais: {original_edge_count:,}")
         
         # ============================================================
-        # CORREÇÃO V2: CONVERSÃO DE COORDENADAS STL → INTERNO
+        # ✅ CONVERSÃO DE COORDENADAS STL → INTERNO
         # ============================================================
-        # STL padrão: X=direita, Y=frente, Z=altura (cima)
-        # Sistema interno: X=direita, Y=altura (cima), Z=frente
-        # 
-        # Conversão necessária: X→X, Y→Z, Z→Y
-        # ============================================================
-        
         print(f"\n🔄 CONVERTENDO SISTEMA DE COORDENADAS:")
         print(f"   STL padrão → Sistema interno")
         print(f"   X→X (direita), Y→Z (frente), Z→Y (altura)")
@@ -102,15 +89,36 @@ class STLLoader:
         dims_before = bounds_before[1] - bounds_before[0]
         print(f"\n   ANTES: X={dims_before[0]:.1f}, Y={dims_before[1]:.1f}, Z={dims_before[2]:.1f}")
         
-        # Aplica conversão: permuta os eixos
-        # Nova ordem: [X, Z, Y] → [X, Y, Z]
-        # Isso faz: X fica X, Y_antigo vira Z_novo, Z_antigo vira Y_novo
+        # ✅ CONVERSÃO CORRETA: Troca Y e Z
         vertices_converted = self.mesh.vertices.copy()
-        vertices_converted[:, [1, 2]] = vertices_converted[:, [2, 1]]  # Troca Y ↔ Z
+        # Permutação: [X, Y, Z] → [X, Z, Y]
+        vertices_converted[:, [1, 2]] = vertices_converted[:, [2, 1]]
         
-        # IMPORTANTE: Y agora é "para cima", mas ainda pode estar invertido
-        # Vamos garantir que Y seja positivo para cima
-        # (alguns STLs vêm com Z negativo sendo "para cima")
+        # ============================================================
+        # ✅ ROTAÇÃO DE 180º NO EIXO Z (CORREÇÃO PARA "DE CABEÇA P/ BAIXO")
+        # ============================================================
+        print(f"\n🔄 APLICANDO ROTAÇÃO DE 180° NO EIXO Z")
+        print(f"   (corrige orientação 'de cabeça para baixo')")
+        
+        # Matriz de rotação 180º no eixo Z
+        rotation_angle = 180.0  # graus
+        angle_rad = np.radians(rotation_angle)
+        cos_a = np.cos(angle_rad)  # cos(180) = -1
+        sin_a = np.sin(angle_rad)  # sin(180) = 0
+        
+        rotation_matrix = np.array([
+            [cos_a, -sin_a, 0],
+            [sin_a, cos_a, 0],
+            [0, 0, 1]
+        ])
+        
+        # Aplica rotação
+        vertices_converted = vertices_converted @ rotation_matrix.T
+        
+        # ✅ INVERTE X e Y para corrigir orientação
+        vertices_converted[:, 0] = -vertices_converted[:, 0]  # Inverte X
+        vertices_converted[:, 1] = -vertices_converted[:, 1]  # Inverte Y
+        vertices_converted[:, 2] = -vertices_converted[:, 2]  # Inverte Z
         
         self.mesh.vertices = vertices_converted
         
@@ -118,23 +126,33 @@ class STLLoader:
         bounds_after = self.mesh.bounds
         dims_after = bounds_after[1] - bounds_after[0]
         print(f"   DEPOIS: X={dims_after[0]:.1f}, Y={dims_after[1]:.1f}, Z={dims_after[2]:.1f}")
-        print(f"   ✅ Y agora representa ALTURA\n")
+        print(f"   ✅ Rotação de 180° aplicada no eixo Z\n")
         
         # ============================================================
-        # CENTRALIZAÇÃO E NORMALIZAÇÃO
+        # ✅ CORREÇÃO: CENTRALIZAÇÃO E COLOCA BASE EM Y=0
         # ============================================================
         centroid = self.mesh.centroid
         bounds = self.mesh.bounds
-        min_y = bounds[0][1]
         
-        # Centraliza X e Z, coloca base em Y=0
+        print(f"🔄 CENTRALIZANDO MESH:")
+        print(f"   Centro atual: X={centroid[0]:.1f}, Y={centroid[1]:.1f}, Z={centroid[2]:.1f}")
+        print(f"   Bounds: min={bounds[0]}, max={bounds[1]}")
+        
+        # ✅ CORREÇÃO AQUI: Centraliza X e Z, coloca BASE em Y=0
+        # (subtrai o valor mínimo de Y para que a base fique em Y=0)
+        min_y = bounds[0][1]  # Valor mínimo de Y (base da peça)
+        
         self.mesh.vertices[:, 0] -= centroid[0]  # Centraliza X
         self.mesh.vertices[:, 2] -= centroid[2]  # Centraliza Z
-        self.mesh.vertices[:, 1] -= min_y         # Base em Y=0
+        self.mesh.vertices[:, 1] -= min_y        # ✅ BASE em Y=0 (peça acima da grade)
         
+        # Atualiza bounds após centralização
         bounds = self.mesh.bounds
         max_dimension = np.max(bounds[1] - bounds[0])
         scale_factor = 2.0 / max_dimension if max_dimension > 0 else 1.0
+        
+        print(f"   Bounds após centralização: min={bounds[0]}, max={bounds[1]}")
+        print(f"   ✅ Peça centralizada e base em Y=0\n")
         
         # ============================================================
         # SIMPLIFICAÇÃO OBRIGATÓRIA PARA DESENHO TÉCNICO
@@ -191,6 +209,88 @@ class STLLoader:
         )
         
         return self.mesh_data
+    
+    # ✅ MÉTODOS DE ROTAÇÃO DE EIXOS
+    def _rotate_vertices_x(self, vertices: np.ndarray, angle_degrees: float) -> np.ndarray:
+        """
+        Rotaciona vértices no eixo X
+        
+        Args:
+            vertices: array de vértices [N, 3]
+            angle_degrees: ângulo em graus
+        
+        Returns:
+            vértices rotacionados
+        """
+        angle_rad = np.radians(angle_degrees)
+        
+        # Matriz de rotação no eixo X
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+        
+        # Cria matriz de rotação
+        rotation_matrix = np.array([
+            [1, 0, 0],
+            [0, cos_a, -sin_a],
+            [0, sin_a, cos_a]
+        ])
+        
+        # Aplica rotação
+        return vertices @ rotation_matrix.T  # Multiplicação matricial
+
+    def _rotate_vertices_y(self, vertices: np.ndarray, angle_degrees: float) -> np.ndarray:
+        """
+        Rotaciona vértices no eixo Y
+        
+        Args:
+            vertices: array de vértices [N, 3]
+            angle_degrees: ângulo em graus
+        
+        Returns:
+            vértices rotacionados
+        """
+        angle_rad = np.radians(angle_degrees)
+        
+        # Matriz de rotação no eixo Y
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+        
+        # Cria matriz de rotação
+        rotation_matrix = np.array([
+            [cos_a, 0, sin_a],
+            [0, 1, 0],
+            [-sin_a, 0, cos_a]
+        ])
+        
+        # Aplica rotação
+        return vertices @ rotation_matrix.T  # Multiplicação matricial
+
+    def _rotate_vertices_z(self, vertices: np.ndarray, angle_degrees: float) -> np.ndarray:
+        """
+        Rotaciona vértices no eixo Z
+        
+        Args:
+            vertices: array de vértices [N, 3]
+            angle_degrees: ângulo em graus
+        
+        Returns:
+            vértices rotacionados
+        """
+        angle_rad = np.radians(angle_degrees)
+        
+        # Matriz de rotação no eixo Z
+        cos_a = np.cos(angle_rad)
+        sin_a = np.sin(angle_rad)
+        
+        # Cria matriz de rotação
+        rotation_matrix = np.array([
+            [cos_a, -sin_a, 0],
+            [sin_a, cos_a, 0],
+            [0, 0, 1]
+        ])
+        
+        # Aplica rotação
+        return vertices @ rotation_matrix.T  # Multiplicação matricial
     
     def _simplify_mesh_for_drawing(self, vertices: np.ndarray, faces: np.ndarray) -> np.ndarray:
         """
