@@ -1,0 +1,167 @@
+{
+  "UIshow": "Português (Brasil)",
+  "code": "PT-BR",
+  
+  "menu": {
+    "file": "Arquivo",
+    "file_open": "Abrir STL...",
+    "file_export": "Exportar Imagem...",
+    "file_exit": "Sair",
+    
+    "view": "Visualizar",
+    "view_front": "Vista Frontal",
+    "view_back": "Vista Traseira",
+    "view_top": "Vista Superior",
+    "view_bottom": "Vista Inferior",
+    "view_left": "Vista Esquerda",
+    "view_right": "Vista Direita",
+    "view_isometric": "Vista Isométrica",
+    "view_reset": "Resetar Vista",
+    
+    "settings": "Configurações",
+    "settings_language": "Idioma",
+    "settings_model_color": "Cor do Modelo...",
+    "settings_reset_color": "Restaurar Cor Padrão",
+    
+    "help": "Ajuda",
+    "help_about": "Sobre"
+  },
+  "views": {
+    "front": "FRONTAL",
+    "back": "TRASEIRA",
+    "top": "SUPERIOR",
+    "bottom": "INFERIOR",
+    "left": "ESQERDA",
+    "right": "DIREITA",
+    "isometric": "ISOMÉTRICA"
+  },
+  "toolbar": {
+    "open": "Abrir",
+    "clear": "Limpar",
+    "mirror_x": "Espelhar X",
+    "mirror_y": "Espelhar Y",
+    "mirror_z": "Espelhar Z",
+    "edges": "Arestas",
+    "faces": "Faces",
+    "grid": "Grid"
+  },
+  
+  "sidebar": {
+    "views_title": "⚙️ Vistas Predefinidas",
+    "front": "Frontal",
+    "back": "Traseira",
+    "top": "Superior",
+    "bottom": "Inferior",
+    "left": "Esquerda",
+    "right": "Direita",
+    "isometric": "🔲 Vista Isométrica",
+    "reset": "🔄 Resetar Vista",
+    
+    "actions_title": "🎯 Ações",
+    "generate_drawing": "🔧 Gerar Desenho",
+    "export_image": "💾 Exportar IMG",
+    
+    "info_title": "📊 Info do Modelo",
+    "file": "Arquivo:",
+    "vertices": "Vértices:",
+    "faces": "Faces:",
+    "edges": "Arestas:",
+    "dimensions": "Dimensões:",
+    "volume": "Volume:",
+    "width": "L",
+    "height": "A",
+    "depth": "P",
+    "simplified": "✓ Simplificado",
+    "not_simplified": "Não simplificado",
+    
+    "settings_title": "⚙️ Configurações",
+    "language": "Idioma:",
+    "model_color": "Cor do Modelo:",
+    "choose_color": "Escolher Cor",
+    "reset_color": "Restaurar Padrão",
+    
+    "navigation_title": "🖱️ Navegação",
+    "mouse_left": "• Esq: Rotacionar",
+    "mouse_middle": "• Meio: Pan",
+    "mouse_scroll": "• Scroll: Zoom"
+  },
+  
+  "statusbar": {
+    "ready": "Pronto. Abra um arquivo STL para começar.",
+    "loading": "Carregando...",
+    "generating": "Gerando desenho técnico...",
+    "loaded": "✓ Carregado:",
+    "vertices": "vértices",
+    "edges": "arestas",
+    "error": "Erro ao carregar arquivo",
+    "model_removed": "Modelo removido",
+    "view_changed": "Vista alterada:",
+    "exported": "✓ Imagem exportada:",
+    "drawing_generated": "✓ Desenho técnico gerado"
+  },
+  
+  "dialogs": {
+    "open_stl": "Abrir Arquivo STL",
+    "stl_files": "Arquivos STL (*.stl)",
+    "all_files": "Todos os arquivos (*)",
+    "export_image": "Exportar Imagem",
+    "loading_title": "Carregando",
+    "loading_message": "Carregando arquivo STL...",
+    "cancel": "Cancelar",
+    "no_model": "Nenhum modelo carregado.",
+    "warning": "Aviso",
+    "error": "Erro",
+    "info": "Informação",
+    "about_title": "Sobre",
+    "about_text": "<h3>STL to Technical Drawing</h3><p>Gerador automático de desenhos técnicos.</p><p><b>Versão:</b> 1.2.36</p><p><b>Por:</b> Roberto Reis - SE3D | 2025</p>"
+  },
+  
+  "drawing_window": {
+    "title": "Desenho Técnico - Preview",
+    "info_title": "Informações do Modelo",
+    "dimensions_label": "Dimensões:",
+    "views_label": "Vistas: 6 ortográficas",
+    
+    "display_title": "Opções de Exibição",
+    "show_hidden": "Mostrar Linhas Ocultas",
+    "show_dimensions": "Mostrar Dimensões",
+    "show_border": "Mostrar Borda",
+    
+    "views_export_title": "Vistas a Exportar",
+    "view_front": "Frontal",
+    "view_top": "Superior",
+    "view_right": "Direita",
+    "view_left": "Esquerda",
+    "view_bottom": "Inferior",
+    "view_back": "Traseira",
+    "view_iso": "Isométrica",
+    "views_info": "Selecione quais vistas incluir no desenho",
+    
+    "export_title": "Exportação",
+    "format": "Formato:",
+    "dpi": "DPI:",
+    "export_button": "Exportar Desenho",
+    "close_button": "Fechar",
+    
+    "toolbar_zoom_in": "Zoom +",
+    "toolbar_zoom_out": "Zoom -",
+    "toolbar_refresh": "Atualizar",
+    "toolbar_export": "Exportar",
+    
+    "statusbar_wait": "Aguarde...",
+    "statusbar_generating": "Gerando projeções...",
+    "statusbar_ready": "✓ Projeções geradas:",
+    "statusbar_views": "vistas",
+    "statusbar_error": "✗ Erro na geração",
+    "statusbar_exporting": "Exportando para",
+    "statusbar_exported": "Exportado:",
+    
+    "export_dialog_title": "Exportar Desenho Técnico",
+    "export_success_title": "Exportação Concluída",
+    "export_success_message": "Desenho técnico exportado com sucesso!\n\nArquivo: {filepath}\nResolução: {width}x{height} pixels ({dpi} DPI)",
+    "export_error_title": "Erro na Exportação",
+    "export_error_message": "Erro ao exportar desenho:\n{error}"
+  }
+  
+  
+}

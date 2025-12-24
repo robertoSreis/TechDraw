@@ -1,0 +1,167 @@
+{
+  "UIshow": "English (United States)",
+  "code": "EN-US",
+  
+  "menu": {
+    "file": "File",
+    "file_open": "Open STL...",
+    "file_export": "Export Image...",
+    "file_exit": "Exit",
+    
+    "view": "View",
+    "view_front": "Front View",
+    "view_back": "Back View",
+    "view_top": "Top View",
+    "view_bottom": "Bottom View",
+    "view_left": "Left View",
+    "view_right": "Right View",
+    "view_isometric": "Isometric View",
+    "view_reset": "Reset View",
+    
+    "settings": "Settings",
+    "settings_language": "Language",
+    "settings_model_color": "Model Color...",
+    "settings_reset_color": "Reset Default Color",
+    
+    "help": "Help",
+    "help_about": "About"
+  },
+    "views": {
+    "front": "FRONT",
+    "back": "BACK",
+    "top": "TOP",
+    "bottom": "BOTTOM",
+    "left": "LEFT",
+    "right": "RIGHT",
+    "isometric": "ISOMETRIC"
+  },
+  "toolbar": {
+    "open": "Open",
+    "clear": "Clear",
+    "mirror_x": "Mirror X",
+    "mirror_y": "Mirror Y",
+    "mirror_z": "Mirror Z",
+    "edges": "Edges",
+    "faces": "Faces",
+    "grid": "Grid"
+  },
+  
+  "sidebar": {
+    "views_title": "⚙️ Predefined Views",
+    "front": "Front",
+    "back": "Back",
+    "top": "Top",
+    "bottom": "Bottom",
+    "left": "Left",
+    "right": "Right",
+    "isometric": "🔲 Isometric View",
+    "reset": "🔄 Reset View",
+    
+    "actions_title": "🎯 Actions",
+    "generate_drawing": "🔧 Generate Drawing",
+    "export_image": "💾 Export IMG",
+    
+    "info_title": "📊 Model Info",
+    "file": "File:",
+    "vertices": "Vertices:",
+    "faces": "Faces:",
+    "edges": "Edges:",
+    "dimensions": "Dimensions:",
+    "volume": "Volume:",
+    "width": "W",
+    "height": "H",
+    "depth": "D",
+    "simplified": "✓ Simplified",
+    "not_simplified": "Not simplified",
+    
+    "settings_title": "⚙️ Settings",
+    "language": "Language:",
+    "model_color": "Model Color:",
+    "choose_color": "Choose Color",
+    "reset_color": "Reset Default",
+    
+    "navigation_title": "🖱️ Navigation",
+    "mouse_left": "• Left: Rotate",
+    "mouse_middle": "• Middle: Pan",
+    "mouse_scroll": "• Scroll: Zoom"
+  },
+  
+  "statusbar": {
+    "ready": "Ready. Open an STL file to begin.",
+    "loading": "Loading...",
+    "generating": "Generating technical drawing...",
+    "loaded": "✓ Loaded:",
+    "vertices": "vertices",
+    "edges": "edges",
+    "error": "Error loading file",
+    "model_removed": "Model removed",
+    "view_changed": "View changed:",
+    "exported": "✓ Image exported:",
+    "drawing_generated": "✓ Technical drawing generated"
+  },
+  
+  "dialogs": {
+    "open_stl": "Open STL File",
+    "stl_files": "STL Files (*.stl)",
+    "all_files": "All files (*)",
+    "export_image": "Export Image",
+    "loading_title": "Loading",
+    "loading_message": "Loading STL file...",
+    "cancel": "Cancel",
+    "no_model": "No model loaded.",
+    "warning": "Warning",
+    "error": "Error",
+    "info": "Information",
+    "about_title": "About",
+    "about_text": "<h3>STL to Technical Drawing</h3><p>Automatic technical drawing generator.</p><p><b>Version:</b> 1.2.36</p><p><b>By:</b> Roberto Reis - SE3D | 2025</p>"
+  },
+  
+  "drawing_window": {
+    "title": "Technical Drawing - Preview",
+    "info_title": "Model Information",
+    "dimensions_label": "Dimensions:",
+    "views_label": "Views: 6 orthographic",
+    
+    "display_title": "Display Options",
+    "show_hidden": "Show Hidden Lines",
+    "show_dimensions": "Show Dimensions",
+    "show_border": "Show Border",
+    
+    "views_export_title": "Views to Export",
+    "view_front": "Front",
+    "view_top": "Top",
+    "view_right": "Right",
+    "view_left": "Left",
+    "view_bottom": "Bottom",
+    "view_back": "Back",
+    "view_iso": "Isometric",
+    "views_info": "Select which views to include in the drawing",
+    
+    "export_title": "Export",
+    "format": "Format:",
+    "dpi": "DPI:",
+    "export_button": "Export Drawing",
+    "close_button": "Close",
+    
+    "toolbar_zoom_in": "Zoom +",
+    "toolbar_zoom_out": "Zoom -",
+    "toolbar_refresh": "Refresh",
+    "toolbar_export": "Export",
+    
+    "statusbar_wait": "Please wait...",
+    "statusbar_generating": "Generating projections...",
+    "statusbar_ready": "✓ Projections generated:",
+    "statusbar_views": "views",
+    "statusbar_error": "✗ Generation error",
+    "statusbar_exporting": "Exporting to",
+    "statusbar_exported": "Exported:",
+    
+    "export_dialog_title": "Export Technical Drawing",
+    "export_success_title": "Export Completed",
+    "export_success_message": "Technical drawing exported successfully!\n\nFile: {filepath}\nResolution: {width}x{height} pixels ({dpi} DPI)",
+    "export_error_title": "Export Error",
+    "export_error_message": "Error exporting drawing:\n{error}"
+  }
+  
+
+}
