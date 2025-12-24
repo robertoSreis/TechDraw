@@ -9,7 +9,7 @@ Descrição: Gerencia internacionalização (i18n) do aplicativo
 """
 
 import json
-import os
+import os,sys
 from typing import Dict, List, Optional
 
 
@@ -353,9 +353,90 @@ class LanguageManager:
         
         return value if isinstance(value, str) else (default if default else key)
     
-    def get_available_languages(self) -> List[Dict[str, str]]:
-        """Retorna lista de idiomas disponíveis"""
-        return self.available_languages
+    def get_available_languages(self):
+        """Retorna lista de idiomas disponíveis com múltiplas tentativas"""
+        try:
+            languages = []
+            
+            # Tenta vários locais possíveis
+            possible_paths = [
+                # 1. Relativo ao executável (para .exe) - para Nuitka
+                os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "lang"),
+                
+                # 2. Para PyInstaller/Flet-to-exe
+                os.path.join(os.path.dirname(sys.executable), "lang"),
+                
+                # 3. Raiz do projeto (para desenvolvimento no VSCode)
+                os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "lang"),
+                
+                # 4. Diretório atual de trabalho
+                os.path.join(os.getcwd(), "lang"),
+                
+                # 5. Mesma pasta do script principal
+                os.path.join(os.path.dirname(sys.argv[0]), "lang"),
+                
+            ]
+            
+            lang_dir = None
+            for path in possible_paths:
+                path = os.path.normpath(path)
+                print(f"🔍 Tentando: {path}")
+                if os.path.exists(path) and os.path.isdir(path):
+                    lang_dir = path
+                    print(f"✅ Encontrada pasta lang em: {lang_dir}")
+                    break
+            
+            if not lang_dir:
+                print("❌ Nenhuma pasta lang encontrada em nenhum local!")
+                return []
+            
+            # Procura arquivos .json
+            import glob
+            lang_files = glob.glob(os.path.join(lang_dir, "*.json"))
+            
+            print(f"📚 Encontrados {len(lang_files)} arquivos de idioma")
+            
+            for filepath in lang_files:
+                filename = os.path.basename(filepath)
+                lang_code = os.path.splitext(filename)[0]
+                
+                try:
+                    # Tenta abrir com encoding específico para BOM
+                    with open(filepath, 'r', encoding='utf-8-sig') as f:  # utf-8-sig lida com BOM
+                        data = json.load(f)
+                    
+                    lang_name = data.get('UIshow', lang_code)
+                    
+                    languages.append({
+                        'code': lang_code,
+                        'name': lang_name,
+                        'file': filepath
+                    })
+                    
+                    print(f"   ✅ {lang_code} -> {lang_name}")
+                    
+                except json.JSONDecodeError as e:
+                    print(f"   ❌ ERRO JSON em {filename}: {e}")
+                    # Mostra um trecho do arquivo com erro
+                    with open(filepath, 'r', encoding='utf-8') as f:
+                        content = f.read()
+                        error_pos = e.pos
+                        start = max(0, error_pos - 50)
+                        end = min(len(content), error_pos + 50)
+                        print(f"      Contexto: ...{content[start:end]}...")
+                        
+                except Exception as e:
+                    print(f"   ❌ Erro em {filename}: {type(e).__name__}: {e}")
+            
+            print(f"📊 Total carregados com sucesso: {len(languages)}")
+            return languages
+            
+        except Exception as e:
+            print(f"💥 Erro crítico em get_available_languages: {e}")
+            import traceback
+            traceback.print_exc()
+            return []  # Retorna lista vazia em vez de chamar a si mesmo
+            
     
     def get_current_language(self) -> str:
         """Retorna código do idioma atual"""

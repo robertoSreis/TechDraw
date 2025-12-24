@@ -100,15 +100,22 @@ class ProjectionWorker(QThread):
 class DrawingPreviewWindow(QMainWindow):
     """Janela de preview e exportação do desenho técnico"""
     
-    def __init__(self, mesh_data: MeshData, parent=None):
+    def __init__(self, mesh_data: MeshData, parent=None, lang=None):
         super().__init__(parent)
         
         self.mesh_data = mesh_data
+        self.lang = lang  # ← NOVO
         self.views: Dict[ViewType, ProjectedView] = {}
         self.worker: Optional[ProjectionWorker] = None
         self.progress_dialog = None
         
-        self.setWindowTitle("Desenho Técnico - Preview")
+        # Se não foi passado lang, cria um novo
+        if self.lang is None:
+            from utils.language_manager import LanguageManager
+            self.lang = LanguageManager()
+            self.lang.load_language("PT-BR")
+        
+        self.setWindowTitle(self.lang.get("drawing_window.title"))
         self.setMinimumSize(1000, 700)
         self.resize(1200, 800)
         

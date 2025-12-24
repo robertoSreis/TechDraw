@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QGroupBox, QCheckBox, QPushButton, QLabel,
     QSplitter, QFrame, QSizePolicy, QProgressDialog,
-    QToolBox, QScrollArea, QComboBox, QColorDialog
+    QToolBox, QScrollArea, QComboBox, QColorDialog,QMenu 
 )
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
 from PyQt6.QtGui import QAction, QKeySequence, QColor
@@ -82,7 +82,7 @@ class MainWindow(QMainWindow):
         # Carrega idioma salvo
         saved_lang = self.config.get_language()
         if not self.lang.load_language(saved_lang):
-            self.lang.load_language("PT-BR")  # Fallback
+            self.lang.load_language("EN-US")  # Fallback
         
         # Estado
         self.stl_loader = STLLoader()
@@ -98,9 +98,12 @@ class MainWindow(QMainWindow):
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumSize(1000, 700)
         
-        # ✅ NÃO maximiza aqui - será feito no main.py
+        # ✅ DragAndDrop
         self.setAcceptDrops(True)
+        self.installEventFilter(self)
         
+        
+
         self._setup_ui()
         self._setup_menu()
         self._setup_toolbar()
@@ -135,7 +138,14 @@ class MainWindow(QMainWindow):
         gl_layout.setContentsMargins(0, 0, 0, 0)
         
         self.gl_widget = GLWidget()
+        self.gl_widget.setSizePolicy(QSizePolicy.Policy.Expanding, QSizePolicy.Policy.Expanding)
 
+
+        # ✅ HABILITA MENU DE CONTEXTO
+        self.gl_widget.setContextMenuPolicy(Qt.ContextMenuPolicy.CustomContextMenu)
+        self.gl_widget.customContextMenuRequested.connect(self._show_gl_context_menu)
+        
+        gl_layout.addWidget(self.gl_widget)
 
         self.gl_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding,
@@ -486,11 +496,115 @@ class MainWindow(QMainWindow):
         
         self._set_status(self.lang.get("statusbar.ready"), permanent=True)
     
-    
+    def eventFilter(self, obj, event):
+        """Filtra eventos para garantir que drag/drop funcione"""
+        from PyQt6.QtCore import QEvent
+        
+        if event.type() == QEvent.Type.DragEnter:
+            print(f"📥 EventFilter: DragEnter em {obj}")
+            self.dragEnterEvent(event)
+            return True
+            
+        elif event.type() == QEvent.Type.Drop:
+            print(f"📤 EventFilter: Drop em {obj}")
+            self.dropEvent(event)
+            return True
+            
+        return super().eventFilter(obj, event)
+
     def _connect_signals(self):
         """Conecta sinais e slots"""
         self.gl_widget.viewChanged.connect(self._on_view_changed)
 
+    def _show_gl_context_menu(self, pos):
+        """Mostra menu de contexto na área 3D"""
+        menu = QMenu(self)
+        
+        # 1. ABRIR ARQUIVO
+        action_open = menu.addAction(self.action_open.icon(), self.action_open.text())
+        action_open.triggered.connect(self._open_file)
+        
+        # 2. LIMPAR
+        action_clear = menu.addAction("🗑️ " + self.lang.get("toolbar.clear"))
+        action_clear.triggered.connect(self._clear_model)
+        action_clear.setEnabled(self.mesh_data is not None)
+        
+        menu.addSeparator()
+        
+        # 3. SUBMENU: VISTAS (reutiliza as ações do menu View)
+        view_menu = menu.addMenu("👁️ " + self.lang.get("menu.view"))
+        
+        for view_name in VIEWS.keys():
+            view_key = f"menu.view_{view_name}"
+            translated_name = self.lang.get(view_key, self.lang.get(f"views.{view_name}"))
+            
+            action = view_menu.addAction(translated_name)
+            action.triggered.connect(lambda checked, v=view_name: self.gl_widget.set_view(v))
+        
+        view_menu.addSeparator()
+        action_reset_view = view_menu.addAction(self.action_reset.text())
+        action_reset_view.triggered.connect(self.gl_widget.reset_view)
+        
+        menu.addSeparator()
+        
+        # 4. ESPELHAMENTO (reutiliza da toolbar)
+        mirror_menu = menu.addMenu("🔄 " + self.lang.get("toolbar.mirror", "Espelhar"))
+        
+        action_mirror_x = mirror_menu.addAction(self.tool_mirror_x.text())
+        action_mirror_x.setCheckable(True)
+        action_mirror_x.setChecked(self.tool_mirror_x.isChecked())
+        action_mirror_x.toggled.connect(self._toggle_mirror_x)
+        
+        action_mirror_y = mirror_menu.addAction(self.tool_mirror_y.text())
+        action_mirror_y.setCheckable(True)
+        action_mirror_y.setChecked(self.tool_mirror_y.isChecked())
+        action_mirror_y.toggled.connect(self._toggle_mirror_y)
+        
+        action_mirror_z = mirror_menu.addAction(self.tool_mirror_z.text())
+        action_mirror_z.setCheckable(True)
+        action_mirror_z.setChecked(self.tool_mirror_z.isChecked())
+        action_mirror_z.toggled.connect(self._toggle_mirror_z)
+        
+        menu.addSeparator()
+        
+        # 5. EXIBIÇÃO (Faces, Arestas, Grid)
+        display_menu = menu.addMenu("⚙️ " + self.lang.get("sidebar.display", "Exibição"))
+        
+        action_faces = display_menu.addAction(self.tool_faces.text())
+        action_faces.setCheckable(True)
+        action_faces.setChecked(self.tool_faces.isChecked())
+        action_faces.toggled.connect(self._toggle_faces)
+        
+        action_edges = display_menu.addAction(self.tool_edges.text())
+        action_edges.setCheckable(True)
+        action_edges.setChecked(self.tool_edges.isChecked())
+        action_edges.toggled.connect(self._toggle_edges)
+        
+        action_grid = display_menu.addAction(self.tool_grid.text())
+        action_grid.setCheckable(True)
+        action_grid.setChecked(self.tool_grid.isChecked())
+        action_grid.toggled.connect(self._toggle_grid)
+        
+        menu.addSeparator()
+        
+        # 6. EXPORTAR IMAGEM
+        if self.mesh_data is not None:
+            action_export = menu.addAction(self.action_export.icon(), self.action_export.text())
+            action_export.triggered.connect(self._export_image)
+        
+        # 7. GERENCIAR COR DO MODELO (se tiver modelo carregado)
+        if self.mesh_data is not None:
+            color_menu = menu.addMenu("🎨 " + self.lang.get("menu.settings_model_color", "Cor"))
+            
+            action_change_color = color_menu.addAction(self.action_model_color.text())
+            action_change_color.triggered.connect(self._choose_model_color)
+            
+            action_reset_color = color_menu.addAction(self.action_reset_color.text())
+            action_reset_color.triggered.connect(self._reset_model_color)
+        
+        # Mostra o menu na posição do clique
+        menu.exec(self.gl_widget.mapToGlobal(pos))
+        
     def _apply_language(self):
         """✅ APLICA TRADUÇÕES COM TOOLTIPS DINÂMICOS"""
         # Título da janela
@@ -1255,22 +1369,29 @@ class MainWindow(QMainWindow):
         dialog.exec()
     
     def dragEnterEvent(self, event):
-        """Aceita arrastar arquivos STL"""
+        print(f"🔵 dragEnterEvent chamado! URLs: {event.mimeData().hasUrls()}")
         if event.mimeData().hasUrls():
             for url in event.mimeData().urls():
-                if url.toLocalFile().lower().endswith('.stl'):
+                filepath = url.toLocalFile()
+                print(f"   📂 Arquivo: {filepath}")
+                if filepath.lower().endswith('.stl'):
+                    print(f"   ✅ É STL! Aceitando...")
                     event.acceptProposedAction()
                     return
-    
+        print("   ❌ Nenhum arquivo STL encontrado")
+        event.ignore()
+
     def dropEvent(self, event):
-        """Carrega arquivo STL arrastado"""
+        print(f"🟢 dropEvent chamado!")
         for url in event.mimeData().urls():
             filepath = url.toLocalFile()
+            print(f"   🎯 Soltando: {filepath}")
             if filepath.lower().endswith('.stl'):
+                print(f"   ✅ Carregando STL...")
                 self.config.set_last_directory(os.path.dirname(filepath))
                 self._load_stl(filepath)
                 break
-    
+        event.acceptProposedAction()
     def closeEvent(self, event):
         """Limpa threads ao fechar e salva configurações"""
         # Salva estado da janela

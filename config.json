@@ -1,0 +1,22 @@
+{
+  "version": "1.2.35",
+  "language": "PT-BR",
+  "last_directory": "",
+  "model_color": {
+    "r": 0.7,
+    "g": 0.75,
+    "b": 0.8,
+    "a": 1.0
+  },
+  "window": {
+    "maximized": true,
+    "width": 1400,
+    "height": 900
+  },
+  "view_settings": {
+    "show_faces": true,
+    "show_edges": true,
+    "show_grid": true,
+    "wireframe_mode": false
+  }
+}

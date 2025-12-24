@@ -3,7 +3,7 @@
 ===============================================================================
 STL2TechnicalDrawing - Gerador Automático de Desenhos Técnicos
 ===============================================================================
-Versão: 1.0.0
+Versão: 1.2.35
 Autor: Roberto - SE3D
 
 Descrição:
@@ -26,7 +26,13 @@ Uso:
 
 import sys
 import os
-
+from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont,QSurfaceFormat
+from PyQt6.QtCore import Qt
+try:
+    from PIL import Image
+except ImportError:
+    print("Instalando dependências necessárias...")
+    os.system(f"{sys.executable} -m pip install qrcode[pil]")
 # ============================================================================
 # CONFIGURAÇÃO DE PATH
 # ============================================================================
@@ -39,7 +45,7 @@ if BASE_DIR not in sys.path:
 # ============================================================================
 from PyQt6.QtWidgets import QApplication, QMessageBox
 from PyQt6.QtCore import Qt
-from PyQt6.QtGui import QSurfaceFormat, QFont
+
 
 from gui.main_window import MainWindow
 
@@ -309,17 +315,62 @@ def main():
     app = QApplication(sys.argv)
     app.setApplicationName("SE3D -TechDraw")
     app.setOrganizationName("SE3D")
-    app.setApplicationVersion("1.2.35")
+    app.setApplicationVersion("1.3.38")
     app.setStyle("Fusion")
     app.setStyleSheet(get_stylesheet())
     
+    #icone
+    from PyQt6.QtGui import QIcon
+    import os
+    
+    print("\n🔍 Procurando ícone...")
+    
+    # Lista de possíveis locais
+    possible_paths = [
+        os.path.join(BASE_DIR, "icon.ico"),
+        os.path.join(BASE_DIR, "icon.png"),
+        os.path.join(BASE_DIR, "resources", "icon.ico"),
+        os.path.join(BASE_DIR, "images", "icon.ico"),
+        os.path.join(os.getcwd(), "icon.ico"),
+        "icon.ico",
+    ]
+
+    icon_loaded = False
+    for icon_path in possible_paths:
+        icon_path = os.path.normpath(icon_path)
+        if os.path.exists(icon_path):
+            try:
+                app.setWindowIcon(QIcon(icon_path))
+                print(f"✅ Ícone carregado: {icon_path}")
+                icon_loaded = True
+                break
+            except Exception as e:
+                print(f"❌ Erro ao carregar ícone {icon_path}: {e}")
+    
+    if not icon_loaded:
+        print("⚠️  Não foi possível carregar o ícone do arquivo")
+        # Cria um ícone simples como fallback
+        
+        
+        pixmap = QPixmap(64, 64)
+        pixmap.fill(QColor(0, 100, 200))
+        
+        painter = QPainter(pixmap)
+        painter.setPen(QColor(255, 255, 255))
+        painter.setFont(QFont("Arial", 20, QFont.Weight.Bold))
+        painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "3D")
+        painter.end()
+        
+        app.setWindowIcon(QIcon(pixmap))
+        print("✅ Ícone fallback criado")
+
     # Fonte padrão
     font = QFont("Segoe UI", 9)
     app.setFont(font)
     
     # Cria janela principal
     window = MainWindow()
-    window.show()
+    window.showMaximized()
     window.isMaximized()
     
     # Carrega arquivo se passado por argumento
