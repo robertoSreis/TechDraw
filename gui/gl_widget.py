@@ -1,17 +1,16 @@
 """
 ===============================================================================
-STL2TechnicalDrawing - Widget OpenGL 3D
+STL2TechnicalDrawing - Widget OpenGL 3D COM ESPELHAMENTO
 ===============================================================================
 Pasta: gui/
 Arquivo: gui/gl_widget.py
-Descrição: Widget OpenGL para visualização 3D do modelo STL com navegação
+Descrição: Widget OpenGL com navegação e espelhamento X/Y funcional
 ===============================================================================
 """
 
 import sys
 import os
 
-# Adiciona o diretório pai ao path para imports relativos funcionarem
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 import numpy as np
@@ -23,7 +22,6 @@ from PyQt6.QtOpenGLWidgets import QOpenGLWidget
 from OpenGL.GL import *
 from OpenGL.GLU import *
 
-# Imports locais
 from core.stl_loader import MeshData
 from utils.constants import (
     BACKGROUND_COLOR, MODEL_COLOR, EDGE_COLOR, WIREFRAME_COLOR,
@@ -39,8 +37,8 @@ class GLWidget(QOpenGLWidget):
     """Widget OpenGL para renderização 3D com navegação por mouse"""
     
     # Sinais
-    viewChanged = pyqtSignal(str)  # Emitido quando a vista muda
-    meshLoaded = pyqtSignal(dict)  # Emitido quando um mesh é carregado
+    viewChanged = pyqtSignal(str)
+    meshLoaded = pyqtSignal(dict)
     
     def __init__(self, parent: Optional[QWidget] = None):
         super().__init__(parent)
@@ -48,13 +46,13 @@ class GLWidget(QOpenGLWidget):
         # Dados do mesh
         self.mesh_data: Optional[MeshData] = None
         
-        # Transformações da câmera (vista isométrica inicial)
-        self.rotation_x = 25.0    # Olhando levemente de cima
-        self.rotation_y = -45.0   # Rotacionado 45 graus
+        # Transformações da câmera
+        self.rotation_x = 25.0
+        self.rotation_y = -45.0
         self.rotation_z = 0.0
         self.zoom = 4.0
         self.pan_x = 0.0
-        self.pan_y = -0.3         # Levemente deslocado para ver a mesa
+        self.pan_y = -0.3
         
         # Estado do mouse
         self.last_mouse_pos = QPoint()
@@ -66,56 +64,49 @@ class GLWidget(QOpenGLWidget):
         self.show_grid = True
         self.wireframe_mode = False
         
+        # ✅ Espelhamento
+        self.mirror_x = False
+        self.mirror_y = False
+        self.mirror_z = False
+        
+        # ✅ COR DO MODELO (inicializada com a constante)
+        from utils.constants import MODEL_COLOR
+        self.model_color = MODEL_COLOR
+
         # VBOs
         self.vbo_vertices = None
         self.vbo_faces = None
         self.vbo_edges = None
         
-        # Habilita tracking do mouse
         self.setMouseTracking(True)
-        
-        # Foco para eventos de teclado
         self.setFocusPolicy(Qt.FocusPolicy.StrongFocus)
     
     def initializeGL(self):
         """Inicializa o contexto OpenGL"""
-        # Cor de fundo
         glClearColor(*BACKGROUND_COLOR)
-        
-        # Habilita depth test
         glEnable(GL_DEPTH_TEST)
         glDepthFunc(GL_LESS)
         
-        # Habilita iluminação
         glEnable(GL_LIGHTING)
         glEnable(GL_LIGHT0)
         
-        # Configura luz
         glLightfv(GL_LIGHT0, GL_POSITION, LIGHT_POSITION)
         glLightfv(GL_LIGHT0, GL_AMBIENT, LIGHT_AMBIENT)
         glLightfv(GL_LIGHT0, GL_DIFFUSE, LIGHT_DIFFUSE)
         glLightfv(GL_LIGHT0, GL_SPECULAR, LIGHT_SPECULAR)
         
-        # Habilita materiais com cores
         glEnable(GL_COLOR_MATERIAL)
         glColorMaterial(GL_FRONT_AND_BACK, GL_AMBIENT_AND_DIFFUSE)
         
-        # Material
         glMaterialfv(GL_FRONT_AND_BACK, GL_SPECULAR, MATERIAL_SPECULAR)
         glMaterialf(GL_FRONT_AND_BACK, GL_SHININESS, MATERIAL_SHININESS)
         
-        # Normalização automática
         glEnable(GL_NORMALIZE)
-        
-        # Anti-aliasing para linhas
         glEnable(GL_LINE_SMOOTH)
         glHint(GL_LINE_SMOOTH_HINT, GL_NICEST)
-        
-        # Blending para transparência
         glEnable(GL_BLEND)
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA)
         
-        # Habilita arrays de vértices
         glEnableClientState(GL_VERTEX_ARRAY)
         glEnableClientState(GL_NORMAL_ARRAY)
     
@@ -136,44 +127,35 @@ class GLWidget(QOpenGLWidget):
             height = 1
         
         aspect = width / height
-        
-        # Projeção perspectiva
         gluPerspective(45.0, aspect, 0.1, 1000.0)
-        
         glMatrixMode(GL_MODELVIEW)
     
     def clear_mesh(self):
         """Limpa o mesh carregado"""
         self.mesh_data = None
-        self._needs_display = True
-        self.update()  # Força redesenho
+        self.update()
 
     def paintGL(self):
         """Renderiza a cena"""
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT)
         glLoadIdentity()
         
-        # Posiciona a câmera
         glTranslatef(self.pan_x, self.pan_y, -self.zoom)
         
-        # Aplica rotações
         glRotatef(self.rotation_x, 1.0, 0.0, 0.0)
         glRotatef(self.rotation_y, 0.0, 1.0, 0.0)
         glRotatef(self.rotation_z, 0.0, 0.0, 1.0)
         
-        # Desenha grid
         if self.show_grid:
             self._draw_grid()
         
-        # Desenha eixos
         self._draw_axes()
         
-        # Desenha o mesh
         if self.mesh_data is not None:
             self._draw_mesh()
     
     def _draw_grid(self):
-        """Desenha grid de referência no plano XZ (horizontal - mesa)"""
+        """Desenha grid de referência no plano XZ"""
         glDisable(GL_LIGHTING)
         glColor4f(0.3, 0.3, 0.3, 0.5)
         glLineWidth(1.0)
@@ -185,10 +167,8 @@ class GLWidget(QOpenGLWidget):
         glBegin(GL_LINES)
         for i in range(divisions + 1):
             pos = -grid_size + i * step
-            # Linhas paralelas ao eixo X (no plano XZ, Y=0)
             glVertex3f(-grid_size, 0, pos)
             glVertex3f(grid_size, 0, pos)
-            # Linhas paralelas ao eixo Z
             glVertex3f(pos, 0, -grid_size)
             glVertex3f(pos, 0, grid_size)
         glEnd()
@@ -196,24 +176,24 @@ class GLWidget(QOpenGLWidget):
         glEnable(GL_LIGHTING)
     
     def _draw_axes(self):
-        """Desenha eixos de coordenadas (Y é vertical/altura)"""
+        """Desenha eixos de coordenadas"""
         glDisable(GL_LIGHTING)
         glLineWidth(2.0)
         
         axis_length = 0.5
         
         glBegin(GL_LINES)
-        # Eixo X - Vermelho (largura)
+        # X - Vermelho
         glColor3f(1.0, 0.2, 0.2)
         glVertex3f(0, 0, 0)
         glVertex3f(axis_length, 0, 0)
         
-        # Eixo Y - Verde (altura - vertical)
+        # Y - Verde (altura)
         glColor3f(0.2, 1.0, 0.2)
         glVertex3f(0, 0, 0)
         glVertex3f(0, axis_length, 0)
         
-        # Eixo Z - Azul (profundidade)
+        # Z - Azul
         glColor3f(0.2, 0.2, 1.0)
         glVertex3f(0, 0, 0)
         glVertex3f(0, 0, axis_length)
@@ -222,26 +202,32 @@ class GLWidget(QOpenGLWidget):
         glEnable(GL_LIGHTING)
     
     def _draw_mesh(self):
-        """Desenha o mesh carregado"""
+        """Desenha o mesh carregado COM ESPELHAMENTO"""
         if self.mesh_data is None:
             return
         
-        # Escala para normalizar
         glPushMatrix()
         scale = self.mesh_data.scale
-        glScalef(scale, scale, scale)
+        
+        # ✅ ESPELHAMENTO SIMPLES (não inverte por padrão)
+        scale_x = -scale if self.mirror_x else scale
+        scale_y = -scale if self.mirror_y else scale
+        scale_z = -scale if self.mirror_z else scale
+        
+        glScalef(scale_x, scale_y, scale_z)
         
         # Desenha faces
         if self.show_faces and not self.wireframe_mode:
             glEnable(GL_LIGHTING)
-            glColor4f(*MODEL_COLOR)
+            
+            # ✅ USA self.model_color EM VEZ DA CONSTANTE
+            glColor4f(*self.model_color)
+            
             glPolygonMode(GL_FRONT_AND_BACK, GL_FILL)
             
-            # Usa arrays de vértices
             glVertexPointer(3, GL_FLOAT, 24, self.mesh_data.vertex_data)
             glNormalPointer(GL_FLOAT, 24, self.mesh_data.vertex_data[3:])
             
-            # Desenha com índices
             glDrawElements(
                 GL_TRIANGLES,
                 len(self.mesh_data.face_indices),
@@ -253,7 +239,6 @@ class GLWidget(QOpenGLWidget):
         if self.show_edges or self.wireframe_mode:
             glDisable(GL_LIGHTING)
             
-            # Usa cor laranja quando wireframe ou faces desativadas
             if self.wireframe_mode or not self.show_faces:
                 glColor4f(*WIREFRAME_COLOR)
                 glLineWidth(1.5)
@@ -261,7 +246,6 @@ class GLWidget(QOpenGLWidget):
                 glColor4f(*EDGE_COLOR)
                 glLineWidth(1.0)
             
-            # Offset para evitar z-fighting
             glEnable(GL_POLYGON_OFFSET_LINE)
             glPolygonOffset(-1.0, -1.0)
             
@@ -286,13 +270,13 @@ class GLWidget(QOpenGLWidget):
         self.update()
     
     def reset_view(self):
-        """Reseta a vista para posição padrão (isométrica olhando de cima)"""
-        self.rotation_x = 25.0    # Olhando levemente de cima
-        self.rotation_y = -45.0   # Rotacionado 45 graus
+        """Reseta a vista para posição padrão"""
+        self.rotation_x = 25.0
+        self.rotation_y = -45.0
         self.rotation_z = 0.0
         self.zoom = 4.0
         self.pan_x = 0.0
-        self.pan_y = -0.3         # Levemente deslocado para baixo para ver a mesa
+        self.pan_y = -0.3
         self.update()
     
     def set_view(self, view_name: str):
@@ -306,8 +290,6 @@ class GLWidget(QOpenGLWidget):
             self.pan_y = 0.0
             self.viewChanged.emit(view_name)
             self.update()
-    
-    # ==================== Eventos do Mouse ====================
     
     def mousePressEvent(self, event: QMouseEvent):
         """Início de interação com mouse"""
@@ -327,20 +309,15 @@ class GLWidget(QOpenGLWidget):
         dy = event.pos().y() - self.last_mouse_pos.y()
         
         if self.mouse_button == Qt.MouseButton.LeftButton:
-            # Rotação
             self.rotation_y += dx * ROTATION_SPEED
             self.rotation_x += dy * ROTATION_SPEED
-            
-            # Limita rotação em X
             self.rotation_x = max(-90, min(90, self.rotation_x))
             
         elif self.mouse_button == Qt.MouseButton.MiddleButton:
-            # Pan
             self.pan_x += dx * PAN_SPEED * self.zoom
             self.pan_y -= dy * PAN_SPEED * self.zoom
             
         elif self.mouse_button == Qt.MouseButton.RightButton:
-            # Zoom alternativo (arrastar)
             self.zoom -= dy * ZOOM_SPEED
             self.zoom = max(MIN_ZOOM, min(MAX_ZOOM, self.zoom))
         
@@ -350,21 +327,15 @@ class GLWidget(QOpenGLWidget):
     def wheelEvent(self, event: QWheelEvent):
         """Zoom com scroll do mouse"""
         delta = event.angleDelta().y()
-        
-        # Zoom in/out
         zoom_factor = 1.0 - delta * 0.001
         self.zoom *= zoom_factor
         self.zoom = max(MIN_ZOOM, min(MAX_ZOOM, self.zoom))
-        
         self.update()
-    
-    # ==================== Eventos de Teclado ====================
     
     def keyPressEvent(self, event):
         """Atalhos de teclado"""
         key = event.key()
         
-        # Vistas predefinidas com teclas numéricas
         if key == Qt.Key.Key_1:
             self.set_view('front')
         elif key == Qt.Key.Key_2:
@@ -394,8 +365,6 @@ class GLWidget(QOpenGLWidget):
             self.show_faces = not self.show_faces
             self.update()
     
-    # ==================== Opções de Renderização ====================
-    
     def toggle_wireframe(self, enabled: bool):
         """Alterna modo wireframe"""
         self.wireframe_mode = enabled
@@ -415,3 +384,25 @@ class GLWidget(QOpenGLWidget):
         """Alterna exibição do grid"""
         self.show_grid = enabled
         self.update()
+    
+    # ✅ MÉTODOS DE ESPELHAMENTO
+    def set_mirror_x(self, enabled: bool):
+        """Ativa/desativa espelhamento no eixo X"""
+        self.mirror_x = enabled
+        self.update()
+    
+    def set_mirror_y(self, enabled: bool):
+        """Ativa/desativa espelhamento no eixo Y"""
+        self.mirror_y = enabled
+        self.update()
+
+    def set_mirror_z(self, enabled: bool):
+        """Ativa/desativa espelhamento no eixo Z"""
+        self.mirror_z = enabled
+        self.update()
+
+    def set_model_color(self, color: tuple):
+        """Define a cor do modelo diretamente no widget"""
+        print(f"🔄 GLWidget.set_model_color() chamado com cor: {color}")
+        self.model_color = color  # Armazena localmente
+        self.update()  # Força redesenho imediato

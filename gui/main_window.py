@@ -1,10 +1,10 @@
 """
 ===============================================================================
-STL2TechnicalDrawing - Janela Principal COM INTERFACE ACCORDION
+STL2TechnicalDrawing - Janela Principal CORRIGIDA V2
 ===============================================================================
 Pasta: gui/
 Arquivo: gui/main_window.py
-Descrição: Interface organizada com menu em árvore e barra de status inteligente
+Descrição: Interface com menu reorganizado, tooltips dinâmicos e cor funcional
 ===============================================================================
 """
 
@@ -19,14 +19,16 @@ from PyQt6.QtWidgets import (
     QToolBar, QStatusBar, QFileDialog, QMessageBox,
     QGroupBox, QCheckBox, QPushButton, QLabel,
     QSplitter, QFrame, QSizePolicy, QProgressDialog,
-    QToolBox, QScrollArea
+    QToolBox, QScrollArea, QComboBox, QColorDialog
 )
 from PyQt6.QtCore import Qt, QSize, QThread, pyqtSignal, QTimer
-from PyQt6.QtGui import QAction, QKeySequence,QIcon
+from PyQt6.QtGui import QAction, QKeySequence, QColor
 
 from gui.gl_widget import GLWidget
 from core.stl_loader import STLLoader, MeshData
 from utils.constants import WINDOW_TITLE, WINDOW_WIDTH, WINDOW_HEIGHT, VIEWS
+from utils.config_manager import ConfigManager
+from utils.language_manager import LanguageManager
 
 
 class STLLoaderWorker(QThread):
@@ -68,11 +70,21 @@ class STLLoaderWorker(QThread):
 
 
 class MainWindow(QMainWindow):
-    """Janela principal da aplicação com interface accordion"""
+    """Janela principal com sistema de configuração e i18n"""
     
     def __init__(self):
         super().__init__()
         
+        # Gerenciadores
+        self.config = ConfigManager()
+        self.lang = LanguageManager()
+        
+        # Carrega idioma salvo
+        saved_lang = self.config.get_language()
+        if not self.lang.load_language(saved_lang):
+            self.lang.load_language("PT-BR")  # Fallback
+        
+        # Estado
         self.stl_loader = STLLoader()
         self.mesh_data: Optional[MeshData] = None
         self.loader_worker: Optional[STLLoaderWorker] = None
@@ -82,28 +94,31 @@ class MainWindow(QMainWindow):
         self.statusbar_timer = QTimer()
         self.statusbar_timer.timeout.connect(self._clear_temp_status)
         
+        # Configuração da janela
         self.setWindowTitle(WINDOW_TITLE)
         self.setMinimumSize(1000, 700)
-        self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
+        
+        # ✅ NÃO maximiza aqui - será feito no main.py
         self.setAcceptDrops(True)
-        # Configura ícone da janela
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "icon.ico")
-        if os.path.exists(icon_path):
-            from PyQt6.QtGui import QIcon
-            self.setWindowIcon(QIcon(icon_path))
-        else:
-            print(f"Aviso: Arquivo de ícone não encontrado: {icon_path}")
         
         self._setup_ui()
         self._setup_menu()
         self._setup_toolbar()
         self._setup_statusbar()
         self._connect_signals()
+        self._apply_language()
+        self._load_view_settings()
+
+        # ✅ VERIFICA SE GLWIDGET TEM ATRIBUTO model_color
+        if not hasattr(self.gl_widget, 'model_color'):
+            from utils.constants import MODEL_COLOR
+            self.gl_widget.model_color = MODEL_COLOR
+
+        #teste de aplicação de cor para futura implementação de STL com erros
+        #QTimer.singleShot(5000, lambda: self._apply_model_color((1.0, 0.0, 0.0, 1.0)))
         
-        self.showMaximized()
-    
     def _setup_ui(self):
-        """Configura a interface com accordion"""
+        """Configura a interface com painel lateral simplificado"""
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
         
@@ -120,6 +135,8 @@ class MainWindow(QMainWindow):
         gl_layout.setContentsMargins(0, 0, 0, 0)
         
         self.gl_widget = GLWidget()
+
+
         self.gl_widget.setSizePolicy(
             QSizePolicy.Policy.Expanding,
             QSizePolicy.Policy.Expanding
@@ -127,8 +144,10 @@ class MainWindow(QMainWindow):
         gl_layout.addWidget(self.gl_widget)
         
         splitter.addWidget(gl_container)
-        
-        # ========== Painel lateral com ACCORDION ==========
+
+        from utils.constants import MODEL_COLOR
+        self.gl_widget.model_color = MODEL_COLOR 
+        # ========== Painel lateral SIMPLIFICADO ==========
         side_panel = QWidget()
         side_panel.setMaximumWidth(300)
         side_panel.setMinimumWidth(250)
@@ -137,9 +156,9 @@ class MainWindow(QMainWindow):
         side_layout.setSpacing(5)
         
         # ==========================================
-        # SEÇÃO FIXA 1: Vistas Predefinidas
+        # SEÇÃO 1: Vistas Predefinidas
         # ==========================================
-        views_group = QGroupBox("⚙️ Vistas Predefinidas")
+        views_group = QGroupBox()
         views_layout = QVBoxLayout(views_group)
         views_layout.setSpacing(4)
         views_layout.setContentsMargins(5, 8, 5, 5)
@@ -147,47 +166,73 @@ class MainWindow(QMainWindow):
         # Primeira linha
         views_grid1 = QHBoxLayout()
         views_grid1.setSpacing(3)
-        for name, view_id, key in [("Frontal", "front", "1"), ("Traseira", "back", "2"), ("Superior", "top", "3")]:
-            btn = QPushButton(f"{name} ({key})")
-            btn.setFixedHeight(40)
-            btn.setMinimumWidth(75)
-            btn.clicked.connect(lambda checked, v=view_id: self.gl_widget.set_view(v))
-            views_grid1.addWidget(btn)
+        
+        self.btn_front = QPushButton()
+        self.btn_front.setFixedHeight(40)
+        self.btn_front.setMinimumWidth(75)
+        self.btn_front.clicked.connect(lambda: self.gl_widget.set_view('front'))
+        
+        self.btn_back = QPushButton()
+        self.btn_back.setFixedHeight(40)
+        self.btn_back.setMinimumWidth(75)
+        self.btn_back.clicked.connect(lambda: self.gl_widget.set_view('back'))
+        
+        self.btn_top = QPushButton()
+        self.btn_top.setFixedHeight(40)
+        self.btn_top.setMinimumWidth(75)
+        self.btn_top.clicked.connect(lambda: self.gl_widget.set_view('top'))
+        
+        views_grid1.addWidget(self.btn_front)
+        views_grid1.addWidget(self.btn_back)
+        views_grid1.addWidget(self.btn_top)
         views_layout.addLayout(views_grid1)
 
         # Segunda linha
         views_grid2 = QHBoxLayout()
         views_grid2.setSpacing(3)
-        for name, view_id, key in [("Inferior", "bottom", "4"), ("Esquerda", "left", "5"), ("Direita", "right", "6")]:
-            btn = QPushButton(f"{name} ({key})")
-            btn.setFixedHeight(40)
-            btn.setMinimumWidth(75)
-            btn.clicked.connect(lambda checked, v=view_id: self.gl_widget.set_view(v))
-            views_grid2.addWidget(btn)
+        
+        self.btn_bottom = QPushButton()
+        self.btn_bottom.setFixedHeight(40)
+        self.btn_bottom.setMinimumWidth(75)
+        self.btn_bottom.clicked.connect(lambda: self.gl_widget.set_view('bottom'))
+        
+        self.btn_left = QPushButton()
+        self.btn_left.setFixedHeight(40)
+        self.btn_left.setMinimumWidth(75)
+        self.btn_left.clicked.connect(lambda: self.gl_widget.set_view('left'))
+        
+        self.btn_right = QPushButton()
+        self.btn_right.setFixedHeight(40)
+        self.btn_right.setMinimumWidth(75)
+        self.btn_right.clicked.connect(lambda: self.gl_widget.set_view('right'))
+        
+        views_grid2.addWidget(self.btn_bottom)
+        views_grid2.addWidget(self.btn_left)
+        views_grid2.addWidget(self.btn_right)
         views_layout.addLayout(views_grid2)
 
         # Isométrica e Reset
-        btn_iso = QPushButton("🔲 Vista Isométrica (7)")
-        btn_iso.setFixedHeight(32)
-        btn_iso.clicked.connect(lambda: self.gl_widget.set_view('isometric'))
-        views_layout.addWidget(btn_iso)
+        self.btn_iso = QPushButton()
+        self.btn_iso.setFixedHeight(32)
+        self.btn_iso.clicked.connect(lambda: self.gl_widget.set_view('isometric'))
+        views_layout.addWidget(self.btn_iso)
         
-        btn_reset = QPushButton("🔄 Resetar Vista (R)")
-        btn_reset.setFixedHeight(32)
-        btn_reset.clicked.connect(self.gl_widget.reset_view)
-        views_layout.addWidget(btn_reset)
+        self.btn_reset = QPushButton()
+        self.btn_reset.setFixedHeight(32)
+        self.btn_reset.clicked.connect(self.gl_widget.reset_view)
+        views_layout.addWidget(self.btn_reset)
         
         side_layout.addWidget(views_group)
         
         # ==========================================
-        # SEÇÃO FIXA 2: Ações Principais
+        # SEÇÃO 2: Ações Principais
         # ==========================================
-        actions_group = QGroupBox("🎯 Ações")
+        actions_group = QGroupBox()
         actions_layout = QVBoxLayout(actions_group)
         actions_layout.setSpacing(10)
         actions_layout.setContentsMargins(5, 8, 5, 5)
         
-        self.btn_generate = QPushButton("📐 Gerar Desenho")
+        self.btn_generate = QPushButton()
         self.btn_generate.setEnabled(False)
         self.btn_generate.setFixedHeight(40)
         self.btn_generate.setStyleSheet("""
@@ -207,7 +252,7 @@ class MainWindow(QMainWindow):
         """)
         self.btn_generate.clicked.connect(self._generate_technical_drawing)
         
-        self.btn_export = QPushButton("💾 Exportar IMG")
+        self.btn_export = QPushButton()
         self.btn_export.setEnabled(False)
         self.btn_export.setFixedHeight(32)
         self.btn_export.clicked.connect(self._export_image)
@@ -218,7 +263,7 @@ class MainWindow(QMainWindow):
         side_layout.addWidget(actions_group)
         
         # ==========================================
-        # ACCORDION / TOOLBOX para seções colapsáveis
+        # ACCORDION / TOOLBOX - APENAS INFO
         # ==========================================
         self.toolbox = QToolBox()
         self.toolbox.setStyleSheet("""
@@ -245,13 +290,13 @@ class MainWindow(QMainWindow):
         info_layout.setContentsMargins(5, 5, 5, 5)
         info_layout.setSpacing(10)
         
-        self.lbl_filename = QLabel("<b>Arquivo:</b><br>Nenhum")
-        self.lbl_vertices = QLabel("<b>Vértices:</b> -")
-        self.lbl_faces = QLabel("<b>Faces:</b> -")
-        self.lbl_edges = QLabel("<b>Arestas:</b> -")
-        self.lbl_dimensions = QLabel("<b>Dimensões:</b><br>-")
-        self.lbl_volume = QLabel("<b>Volume:</b> -")
-        self.lbl_simplification = QLabel("")
+        self.lbl_filename = QLabel()
+        self.lbl_vertices = QLabel()
+        self.lbl_faces = QLabel()
+        self.lbl_edges = QLabel()
+        self.lbl_dimensions = QLabel()
+        self.lbl_volume = QLabel()
+        self.lbl_simplification = QLabel()
         
         for lbl in [self.lbl_filename, self.lbl_vertices, self.lbl_faces, 
                     self.lbl_edges, self.lbl_dimensions, self.lbl_volume]:
@@ -270,69 +315,21 @@ class MainWindow(QMainWindow):
         info_layout.addWidget(self.lbl_simplification)
         
         info_layout.addStretch()
-        self.toolbox.addItem(info_page, "📊 Info do Modelo")
-        
-        # --- PÁGINA 2: Opções de Exibição ---
-        display_page = QWidget()
-        display_layout = QVBoxLayout(display_page)
-        display_layout.setContentsMargins(5, 5, 5, 5)
-        display_layout.setSpacing(10)
-        
-        self.chk_faces = QCheckBox("Faces (F)")
-        self.chk_faces.setChecked(True)
-        self.chk_faces.toggled.connect(self.gl_widget.toggle_faces)
-        
-        self.chk_edges = QCheckBox("Arestas (E)")
-        self.chk_edges.setChecked(True)
-        self.chk_edges.toggled.connect(self.gl_widget.toggle_edges)
-        
-        self.chk_wireframe = QCheckBox("Wireframe (W)")
-        self.chk_wireframe.toggled.connect(self.gl_widget.toggle_wireframe)
-        
-        self.chk_grid = QCheckBox("Grid (G)")
-        self.chk_grid.setChecked(True)
-        self.chk_grid.toggled.connect(self.gl_widget.toggle_grid)
-        
-        for chk in [self.chk_faces, self.chk_edges, self.chk_wireframe, self.chk_grid]:
-            chk.setStyleSheet("padding: 3px; font-size: 9px;")
-            display_layout.addWidget(chk)
-        
-        # Info sobre simplificação
-        line2 = QFrame()
-        line2.setFrameShape(QFrame.Shape.HLine)
-        line2.setFrameShadow(QFrame.Shadow.Sunken)
-        display_layout.addWidget(line2)
-        
-        info_simplify = QLabel(
-            "<i style='color: #4CAF50; font-size: 8px;'>"
-            "💡 Malhas simplificadas<br>"
-            "automaticamente"
-            "</i>"
-        )
-        info_simplify.setWordWrap(True)
-        display_layout.addWidget(info_simplify)
-        
-        display_layout.addStretch()
-        self.toolbox.addItem(display_page, "🎨 Exibição")
+        self.toolbox.addItem(info_page, "📊")
         
         side_layout.addWidget(self.toolbox)
         
         # ==========================================
-        # SEÇÃO FIXA 3: Navegação (no final)
+        # SEÇÃO 3: Navegação (no final)
         # ==========================================
-        help_group = QGroupBox("🖱️ Navegação")
+        help_group = QGroupBox()
         help_layout = QVBoxLayout(help_group)
         help_layout.setContentsMargins(5, 8, 5, 5)
         
-        help_label = QLabel(
-            "<b>Mouse:</b><br>"
-            "• Esq: Rotacionar<br>"
-            "• Meio: Pan<br>"
-            "• Scroll: Zoom"
-        )
-        help_label.setStyleSheet("color: #aaa; font-size: 8px;")
-        help_label.setWordWrap(True)
-        help_layout.addWidget(help_label)
+        self.help_label = QLabel()
+        self.help_label.setStyleSheet("color: #aaa; font-size: 8px;")
+        self.help_label.setWordWrap(True)
+        help_layout.addWidget(self.help_label)
         
         side_layout.addWidget(help_group)
         
@@ -340,69 +337,142 @@ class MainWindow(QMainWindow):
         splitter.setSizes([1000, 300])
         
         main_layout.addWidget(splitter)
-    
+
     def _setup_menu(self):
-        """Configura o menu principal"""
+        """✅ MENU REORGANIZADO - Cor e Idioma no topo"""
         menubar = self.menuBar()
         
-        file_menu = menubar.addMenu("&Arquivo")
+        # ========== Menu Arquivo ==========
+        self.menu_file = menubar.addMenu("")
         
-        open_action = QAction("&Abrir STL...", self)
-        open_action.setShortcut(QKeySequence.StandardKey.Open)
-        open_action.triggered.connect(self._open_file)
-        file_menu.addAction(open_action)
+        self.action_open = QAction("", self)
+        self.action_open.setShortcut(QKeySequence.StandardKey.Open)
+        self.action_open.triggered.connect(self._open_file)
+        self.menu_file.addAction(self.action_open)
         
-        file_menu.addSeparator()
+        self.menu_file.addSeparator()
         
-        export_action = QAction("&Exportar Imagem...", self)
-        export_action.setShortcut(QKeySequence("Ctrl+E"))
-        export_action.triggered.connect(self._export_image)
-        file_menu.addAction(export_action)
+        self.action_export = QAction("", self)
+        self.action_export.setShortcut(QKeySequence("Ctrl+E"))
+        self.action_export.triggered.connect(self._export_image)
+        self.menu_file.addAction(self.action_export)
         
-        file_menu.addSeparator()
+        self.menu_file.addSeparator()
         
-        exit_action = QAction("&Sair", self)
-        exit_action.setShortcut(QKeySequence.StandardKey.Quit)
-        exit_action.triggered.connect(self.close)
-        file_menu.addAction(exit_action)
+        self.action_exit = QAction("", self)
+        self.action_exit.setShortcut(QKeySequence.StandardKey.Quit)
+        self.action_exit.triggered.connect(self.close)
+        self.menu_file.addAction(self.action_exit)
         
-        view_menu = menubar.addMenu("&Visualizar")
+        # ========== Menu Visualizar ==========
+        self.menu_view = menubar.addMenu("")
         
-        for view_name, view_data in VIEWS.items():
-            action = QAction(view_data['name'], self)
+        for view_name in VIEWS.keys():
+            action = QAction("", self)
+            action.setData(view_name)
             action.triggered.connect(lambda checked, v=view_name: self.gl_widget.set_view(v))
-            view_menu.addAction(action)
+            self.menu_view.addAction(action)
+            setattr(self, f"action_view_{view_name}", action)
         
-        view_menu.addSeparator()
+        self.menu_view.addSeparator()
         
-        reset_action = QAction("&Resetar Vista", self)
-        reset_action.setShortcut(QKeySequence("R"))
-        reset_action.triggered.connect(self.gl_widget.reset_view)
-        view_menu.addAction(reset_action)
+        self.action_reset = QAction("", self)
+        self.action_reset.setShortcut(QKeySequence("R"))
+        self.action_reset.triggered.connect(self.gl_widget.reset_view)
+        self.menu_view.addAction(self.action_reset)
         
-        help_menu = menubar.addMenu("A&juda")
+        # ========== ✅ NOVO: Menu Configurações ==========
+        self.menu_settings = menubar.addMenu("")
         
-        about_action = QAction("&Sobre", self)
-        about_action.triggered.connect(self._show_about)
-        help_menu.addAction(about_action)
+        # Submenu Idioma
+        self.menu_language = self.menu_settings.addMenu("")
+        self.language_actions = []
+        
+        for lang in self.lang.get_available_languages():
+            action = QAction(lang['name'], self)
+            action.setData(lang['code'])
+            action.setCheckable(True)
+            action.triggered.connect(lambda checked, code=lang['code']: self._change_language(code))
+            self.menu_language.addAction(action)
+            self.language_actions.append(action)
+        
+        self.menu_settings.addSeparator()
+        
+        # Cor do Modelo
+        self.action_model_color = QAction("", self)
+        self.action_model_color.triggered.connect(self._choose_model_color)
+        self.menu_settings.addAction(self.action_model_color)
+        
+        self.action_reset_color = QAction("", self)
+        self.action_reset_color.triggered.connect(self._reset_model_color)
+        self.menu_settings.addAction(self.action_reset_color)
+        
+        # ========== Menu Ajuda ==========
+        self.menu_help = menubar.addMenu("")
+        
+        self.action_about = QAction("", self)
+        self.action_about.triggered.connect(self._show_about)
+        self.menu_help.addAction(self.action_about)
     
     def _setup_toolbar(self):
-        """Configura a barra de ferramentas"""
+        """✅ TOOLBAR COM TOOLTIPS DINÂMICOS"""
         toolbar = QToolBar("Ferramentas")
         toolbar.setIconSize(QSize(24, 24))
+        toolbar.setMovable(False)
         self.addToolBar(toolbar)
         
-        open_action = QAction("📁 Abrir", self)
-        open_action.setStatusTip("Abrir arquivo STL")
-        open_action.triggered.connect(self._open_file)
-        toolbar.addAction(open_action)
+        # Botão Abrir
+        self.tool_open = QAction("📂", self)
+        self.tool_open.triggered.connect(self._open_file)
+        toolbar.addAction(self.tool_open)
+        
+        # Botão Limpar
+        self.tool_clear = QAction("🗑️", self)
+        self.tool_clear.triggered.connect(self._clear_model)
+        toolbar.addAction(self.tool_clear)
         
         toolbar.addSeparator()
+        
+        # Mirror X
+        self.tool_mirror_x = QAction("↔️ X", self)
+        self.tool_mirror_x.setCheckable(True)
+        self.tool_mirror_x.toggled.connect(self._toggle_mirror_x)
+        toolbar.addAction(self.tool_mirror_x)
+        
+        # Mirror Y
+        self.tool_mirror_y = QAction("🔄 Y", self)
+        self.tool_mirror_y.setCheckable(True)
+        self.tool_mirror_y.toggled.connect(self._toggle_mirror_y)
+        toolbar.addAction(self.tool_mirror_y)
 
-        clear_action = QAction("🗑️ Limpar", self)
-        clear_action.setStatusTip("Limpar modelo carregado")
-        clear_action.triggered.connect(self._clear_model)
-        toolbar.addAction(clear_action)
+        #Mirror Z
+        self.tool_mirror_z = QAction("↕️ Z", self)
+        self.tool_mirror_z.setCheckable(True)
+        self.tool_mirror_z.toggled.connect(self._toggle_mirror_z)
+        toolbar.addAction(self.tool_mirror_z)
+        
+        toolbar.addSeparator()
+        
+        # Arestas
+        self.tool_edges = QAction("📏", self)
+        self.tool_edges.setCheckable(True)
+        self.tool_edges.setChecked(True)
+        self.tool_edges.toggled.connect(self._toggle_edges)
+        toolbar.addAction(self.tool_edges)
+        
+        # Faces
+        self.tool_faces = QAction("🔲", self)
+        self.tool_faces.setCheckable(True)
+        self.tool_faces.setChecked(True)
+        self.tool_faces.toggled.connect(self._toggle_faces)
+        toolbar.addAction(self.tool_faces)
+        
+        # Grid
+        self.tool_grid = QAction("⊞", self)
+        self.tool_grid.setCheckable(True)
+        self.tool_grid.setChecked(True)
+        self.tool_grid.toggled.connect(self._toggle_grid)
+        toolbar.addAction(self.tool_grid)
     
     def _setup_statusbar(self):
         """Configura a barra de status inteligente"""
@@ -410,21 +480,206 @@ class MainWindow(QMainWindow):
         self.setStatusBar(self.statusbar)
         
         # Label permanente para info geral
-        self.status_label_permanent = QLabel("Pronto")
+        self.status_label_permanent = QLabel()
         self.status_label_permanent.setStyleSheet("color: #aaa; padding: 2px 5px;")
         self.statusbar.addPermanentWidget(self.status_label_permanent)
         
-        self._set_status("Pronto. Abra um arquivo STL para começar.", permanent=True)
+        self._set_status(self.lang.get("statusbar.ready"), permanent=True)
+    
+    
+    def _connect_signals(self):
+        """Conecta sinais e slots"""
+        self.gl_widget.viewChanged.connect(self._on_view_changed)
+
+    def _apply_language(self):
+        """✅ APLICA TRADUÇÕES COM TOOLTIPS DINÂMICOS"""
+        # Título da janela
+        self.setWindowTitle(WINDOW_TITLE)
+        
+        # ========== Menus ==========
+        self.menu_file.setTitle(self.lang.get("menu.file"))
+        self.action_open.setText(self.lang.get("menu.file_open"))
+        self.action_export.setText(self.lang.get("menu.file_export"))
+        self.action_exit.setText(self.lang.get("menu.file_exit"))
+        
+        self.menu_view.setTitle(self.lang.get("menu.view"))
+        self.action_reset.setText(self.lang.get("menu.view_reset"))
+        
+        # Views no menu
+        for view_name in VIEWS.keys():
+            # ✅ CORREÇÃO: Usa a chave correta para tradução das vistas
+            view_key = f"menu.view_{view_name}"
+            translated_name = self.lang.get(view_key, self.lang.get(f"views.{view_name}"))
+            
+            action = getattr(self, f"action_view_{view_name}", None)
+            if action:
+                action.setText(translated_name)
+        
+        # ✅ NOVO: Menu Configurações
+        self.menu_settings.setTitle(self.lang.get("menu.settings", "Settings"))
+        self.menu_language.setTitle(self.lang.get("menu.settings_language", "Language"))
+        self.action_model_color.setText(self.lang.get("menu.settings_model_color", "Model Color..."))
+        self.action_reset_color.setText(self.lang.get("menu.settings_reset_color", "Reset Default Color"))
+        
+        # Marca idioma atual
+        current_lang = self.lang.get_current_language()
+        for action in self.language_actions:
+            action.setChecked(action.data() == current_lang)
+        
+        self.menu_help.setTitle(self.lang.get("menu.help"))
+        self.action_about.setText(self.lang.get("menu.help_about"))
+        
+        # ========== ✅ TOOLBAR TOOLTIPS DINÂMICOS ==========
+        self.tool_open.setToolTip(self.lang.get("toolbar.open"))
+        self.tool_open.setStatusTip(self.lang.get("toolbar.open"))
+        
+        self.tool_clear.setToolTip(self.lang.get("toolbar.clear"))
+        self.tool_clear.setStatusTip(self.lang.get("toolbar.clear"))
+        
+        self.tool_mirror_x.setToolTip(self.lang.get("toolbar.mirror_x"))
+        self.tool_mirror_x.setStatusTip(self.lang.get("toolbar.mirror_x"))
+        
+        self.tool_mirror_y.setToolTip(self.lang.get("toolbar.mirror_y"))
+        self.tool_mirror_y.setStatusTip(self.lang.get("toolbar.mirror_y"))
+
+        self.tool_mirror_z.setToolTip(self.lang.get("toolbar.mirror_z", "Mirror Z"))
+        self.tool_mirror_z.setStatusTip(self.lang.get("toolbar.mirror_z", "Mirror Z"))
+        
+        self.tool_edges.setToolTip(self.lang.get("toolbar.edges"))
+        self.tool_edges.setStatusTip(self.lang.get("toolbar.edges"))
+        
+        self.tool_faces.setToolTip(self.lang.get("toolbar.faces"))
+        self.tool_faces.setStatusTip(self.lang.get("toolbar.faces"))
+        
+        self.tool_grid.setToolTip(self.lang.get("toolbar.grid"))
+        self.tool_grid.setStatusTip(self.lang.get("toolbar.grid"))
+        
+        # ========== Sidebar - Vistas ==========
+        views_title = self.lang.get("sidebar.views_title")
+        self.toolbox.setItemText(0, views_title.split("️")[-1].strip())
+        
+        self.btn_front.setText(f"{self.lang.get('sidebar.front')} (1)")
+        self.btn_back.setText(f"{self.lang.get('sidebar.back')} (2)")
+        self.btn_top.setText(f"{self.lang.get('sidebar.top')} (3)")
+        self.btn_bottom.setText(f"{self.lang.get('sidebar.bottom')} (4)")
+        self.btn_left.setText(f"{self.lang.get('sidebar.left')} (5)")
+        self.btn_right.setText(f"{self.lang.get('sidebar.right')} (6)")
+        self.btn_iso.setText(f"{self.lang.get('sidebar.isometric')} (7)")
+        self.btn_reset.setText(self.lang.get("sidebar.reset"))
+        
+        # ========== Sidebar - Ações ==========
+        self.btn_generate.setText(self.lang.get("sidebar.generate_drawing"))
+        self.btn_export.setText(self.lang.get("sidebar.export_image"))
+        
+        # ========== Sidebar - Info ==========
+        self._update_model_info_labels()
+        
+        # ========== Sidebar - Navegação ==========
+        help_text = (
+            f"<b>{self.lang.get('sidebar.navigation_title').replace('🖱️ ', '')}:</b><br>"
+            f"{self.lang.get('sidebar.mouse_left')}<br>"
+            f"{self.lang.get('sidebar.mouse_middle')}<br>"
+            f"{self.lang.get('sidebar.mouse_scroll')}"
+        )
+        self.help_label.setText(help_text)
+        
+        # ========== Statusbar ==========
+        self._set_status(self.lang.get("statusbar.ready"), permanent=True)
+
+    def _update_model_info_labels(self):
+        """Atualiza labels de informação do modelo"""
+        if self.mesh_data is None:
+            self.lbl_filename.setText(f"<b>{self.lang.get('sidebar.file')}</b><br>{self.lang.get('dialogs.no_model')}")
+            self.lbl_vertices.setText(f"<b>{self.lang.get('sidebar.vertices')}</b> -")
+            self.lbl_faces.setText(f"<b>{self.lang.get('sidebar.faces')}</b> -")
+            self.lbl_edges.setText(f"<b>{self.lang.get('sidebar.edges')}</b> -")
+            self.lbl_dimensions.setText(f"<b>{self.lang.get('sidebar.dimensions')}</b><br>-")
+            self.lbl_volume.setText(f"<b>{self.lang.get('sidebar.volume')}</b> -")
+            self.lbl_simplification.setText("")
+    
+    def _change_language(self, lang_code: str):
+        """✅ TROCA IDIOMA VIA MENU"""
+        if self.lang.load_language(lang_code):
+            self.config.set_language(lang_code)
+            self._apply_language()
+            
+            # Atualiza checks no menu
+            for action in self.language_actions:
+                action.setChecked(action.data() == lang_code)
+            
+            # Atualiza info do modelo se houver um carregado
+            if self.mesh_data:
+                self._update_loaded_model_info()
+    
+    def _choose_model_color(self):
+        """✅ ESCOLHE COR DO MODELO E APLICA"""
+        current_color = self.config.get_model_color()
+        qcolor = QColor.fromRgbF(*current_color)
+        
+        color = QColorDialog.getColor(qcolor, self, self.lang.get("sidebar.choose_color", "Escolher Cor"))
+        
+        if color.isValid():
+            r, g, b, a = color.getRgbF()
+            self.config.set_model_color(r, g, b, a)
+            self._apply_model_color((r, g, b, a))
+    
+    def _reset_model_color(self):
+        """✅ RESTAURA COR PADRÃO DO MODELO"""
+        from utils.constants import DEFAULT_MODEL_COLOR
+        self.config.set_model_color(*DEFAULT_MODEL_COLOR)
+        self._apply_model_color(DEFAULT_MODEL_COLOR)
+    
+    def _apply_model_color(self, color: tuple):
+        """✅ APLICA COR AO MODELO OPENGL"""
+        print(f"🔧 MainWindow._apply_model_color() - Cor recebida: {color}")
+        
+        # ✅ VERIFICA SE GLWIDGET TEM O MÉTODO
+        if hasattr(self.gl_widget, 'set_model_color'):
+            print(f"✅ Chamando gl_widget.set_model_color({color})")
+            self.gl_widget.set_model_color(color)
+        else:
+            print(f"❌ GLWidget não tem método set_model_color!")
+            # Fallback: define diretamente
+            self.gl_widget.model_color = color
+            self.gl_widget.update()
+        
+        print(f"✅ Cor do modelo aplicada")
+    
+    def _toggle_mirror_x(self, checked: bool):
+        """Toggle espelhamento no eixo X"""
+        self.config.set_view_setting("mirror_x", checked)
+        self.gl_widget.set_mirror_x(checked)
+        print(f"Mirror X: {checked}")
+    
+    def _toggle_mirror_z(self, checked: bool):
+        """Toggle espelhamento no eixo Y"""
+        self.config.set_view_setting("mirror_y", checked)
+        self.gl_widget.set_mirror_y(checked)
+        print(f"Mirror Y: {checked}")
+    
+    def _toggle_mirror_y(self, checked: bool):
+        """Toggle espelhamento no eixo Z"""
+        self.config.set_view_setting("mirror_z", checked)
+        self.gl_widget.set_mirror_z(checked)
+        print(f"Mirror Z: {checked}")
+    
+    def _toggle_edges(self, checked: bool):
+        """Toggle exibição de arestas"""
+        self.config.set_view_setting("show_edges", checked)
+        self.gl_widget.toggle_edges(checked)
+    
+    def _toggle_faces(self, checked: bool):
+        """Toggle exibição de faces"""
+        self.config.set_view_setting("show_faces", checked)
+        self.gl_widget.toggle_faces(checked)
+    
+    def _toggle_grid(self, checked: bool):
+        """Toggle exibição do grid"""
+        self.config.set_view_setting("show_grid", checked)
+        self.gl_widget.toggle_grid(checked)
     
     def _set_status(self, message: str, permanent: bool = False, timeout: int = 5000):
-        """
-        Define mensagem na statusbar
-        
-        Args:
-            message: Mensagem a exibir
-            permanent: Se True, fica permanente. Se False, temporária
-            timeout: Tempo em ms para limpar (apenas se não permanent)
-        """
+        """Define mensagem na statusbar"""
         if permanent:
             self.status_label_permanent.setText(message)
             self.statusbar.clearMessage()
@@ -439,61 +694,61 @@ class MainWindow(QMainWindow):
         self.statusbar.clearMessage()
         self.statusbar_timer.stop()
     
-    def _connect_signals(self):
-        """Conecta sinais e slots"""
-        self.gl_widget.viewChanged.connect(self._on_view_changed)
-    
     def _on_view_changed(self, view_name: str):
         """Callback quando a vista muda"""
         if view_name in VIEWS:
-            self._set_status(f"Vista alterada: {VIEWS[view_name]['name']}", timeout=3000)
+            view_text = self.lang.get(f"views.{view_name}", VIEWS[view_name]['name'])
+            message = f"{self.lang.get('statusbar.view_changed')} {view_text}"
+            self._set_status(message, timeout=3000)
     
     def _open_file(self):
         """Abre diálogo para selecionar arquivo STL"""
+        initial_dir = self.config.get_last_directory()
+        
         filepath, _ = QFileDialog.getOpenFileName(
             self,
-            "Abrir Arquivo STL",
-            "",
-            "Arquivos STL (*.stl);;Todos os arquivos (*)"
+            self.lang.get("dialogs.open_stl"),
+            initial_dir,
+            f"{self.lang.get('dialogs.stl_files')};;{self.lang.get('dialogs.all_files')}"
         )
         
         if filepath:
+            import os
+            self.config.set_last_directory(os.path.dirname(filepath))
             self._load_stl(filepath)
     
     def _clear_model(self):
         """Limpa o modelo carregado"""
         if self.mesh_data is None:
-            QMessageBox.information(self, "Informação", "Nenhum modelo carregado.")
+            QMessageBox.information(
+                self, 
+                self.lang.get("dialogs.info"), 
+                self.lang.get("dialogs.no_model")
+            )
             return
         
         self.mesh_data = None
         self.gl_widget.clear_mesh()
         
-        self.lbl_filename.setText("<b>Arquivo:</b><br>Nenhum")
-        self.lbl_vertices.setText("<b>Vértices:</b> -")
-        self.lbl_faces.setText("<b>Faces:</b> -")
-        self.lbl_edges.setText("<b>Arestas:</b> -")
-        self.lbl_dimensions.setText("<b>Dimensões:</b><br>-")
-        self.lbl_volume.setText("<b>Volume:</b> -")
-        self.lbl_simplification.setText("")
+        self._update_model_info_labels()
         
         self.btn_generate.setEnabled(False)
         self.btn_export.setEnabled(False)
         
         self.gl_widget.reset_view()
         
-        self._set_status("Modelo removido", permanent=True)
+        self._set_status(self.lang.get("statusbar.model_removed"), permanent=True)
     
     def _load_stl(self, filepath: str):
         """Carrega um arquivo STL usando threading"""
         try:
             self.progress_dialog = QProgressDialog(
-                "Carregando arquivo STL...",
-                "Cancelar",
+                self.lang.get("statusbar.loading"),
+                self.lang.get("dialogs.cancel"),
                 0, 100,
                 self
             )
-            self.progress_dialog.setWindowTitle("Carregando")
+            self.progress_dialog.setWindowTitle(self.lang.get("dialogs.loading_title"))
             self.progress_dialog.setWindowModality(Qt.WindowModality.WindowModal)
             self.progress_dialog.setMinimumDuration(0)
             self.progress_dialog.setValue(0)
@@ -509,8 +764,12 @@ class MainWindow(QMainWindow):
             self.progress_dialog.exec()
             
         except Exception as e:
-            QMessageBox.critical(self, "Erro", f"Erro ao iniciar carregamento:\n{str(e)}")
-            self._set_status("Erro ao carregar arquivo", permanent=True)
+            QMessageBox.critical(
+                self, 
+                self.lang.get("dialogs.error"), 
+                f"{self.lang.get('statusbar.error')}:\n{str(e)}"
+            )
+            self._set_status(self.lang.get("statusbar.error"), permanent=True)
     
     def _on_load_progress(self, value: int, message: str):
         """Callback de progresso"""
@@ -524,49 +783,7 @@ class MainWindow(QMainWindow):
             self.mesh_data = mesh_data
             self.gl_widget.set_mesh(self.mesh_data)
             
-            filepath = self.loader_worker.filepath if self.loader_worker else "desconhecido"
-            filename = os.path.basename(filepath)
-            
-            self.lbl_filename.setText(f"<b>Arquivo:</b><br>{filename}")
-            self.lbl_vertices.setText(f"<b>Vértices:</b> {len(mesh_data.vertices):,}")
-            self.lbl_faces.setText(f"<b>Faces:</b> {len(mesh_data.faces):,}")
-            self.lbl_edges.setText(f"<b>Arestas:</b> {len(mesh_data.edges):,}")
-            
-            bounds = mesh_data.bounds
-            width = bounds[1][0] - bounds[0][0]
-            height = bounds[1][1] - bounds[0][1]
-            depth = bounds[1][2] - bounds[0][2]
-            
-            self.lbl_dimensions.setText(
-                f"<b>Dimensões:</b><br>"
-                f"L: {width:.1f} mm<br>"
-                f"A: {height:.1f} mm<br>"
-                f"P: {depth:.1f} mm"
-            )
-            
-            if hasattr(self.loader_worker.loader, 'mesh') and self.loader_worker.loader.mesh:
-                mesh = self.loader_worker.loader.mesh
-                if mesh.is_watertight:
-                    self.lbl_volume.setText(f"<b>Vol:</b> {mesh.volume:.1f} mm³")
-                else:
-                    self.lbl_volume.setText("<b>Vol:</b> N/A (aberto)")
-            else:
-                self.lbl_volume.setText("<b>Volume:</b> -")
-            
-            if mesh_data.simplified_edge_count < mesh_data.original_edge_count:
-                reduction = 100 - (mesh_data.simplified_edge_count / mesh_data.original_edge_count * 100)
-                self.lbl_simplification.setText(
-                    f"<b style='color: #4CAF50;'>✓ Simplificado</b><br>"
-                    f"<span style='font-size: 8px;'>"
-                    f"F: {mesh_data.original_face_count:,} → {mesh_data.simplified_face_count:,}<br>"
-                    f"A: {mesh_data.original_edge_count:,} → {mesh_data.simplified_edge_count:,}<br>"
-                    f"<b>-{reduction:.1f}%</b>"
-                    f"</span>"
-                )
-            else:
-                self.lbl_simplification.setText(
-                    "<i style='color: #888; font-size: 8px;'>Não simplificado</i>"
-                )
+            self._update_loaded_model_info()
             
             self.btn_generate.setEnabled(True)
             self.btn_export.setEnabled(True)
@@ -574,22 +791,91 @@ class MainWindow(QMainWindow):
             if self.progress_dialog:
                 self.progress_dialog.close()
             
-            self._set_status(f"✓ Carregado: {filename} | {len(mesh_data.vertices):,} vértices | {len(mesh_data.edges):,} arestas", permanent=True)
+            filepath = self.loader_worker.filepath if self.loader_worker else "desconhecido"
+            filename = os.path.basename(filepath)
+            
+            message = (
+                f"{self.lang.get('statusbar.loaded')} {filename} | "
+                f"{len(mesh_data.vertices):,} {self.lang.get('statusbar.vertices')} | "
+                f"{len(mesh_data.edges):,} {self.lang.get('statusbar.edges')}"
+            )
+            self._set_status(message, permanent=True)
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            QMessageBox.critical(self, "Erro", f"Erro ao processar modelo:\n{str(e)}")
+            QMessageBox.critical(
+                self, 
+                self.lang.get("dialogs.error"), 
+                f"{self.lang.get('statusbar.error')}:\n{str(e)}"
+            )
             if self.progress_dialog:
                 self.progress_dialog.close()
+    
+    def _update_loaded_model_info(self):
+        """Atualiza informações do modelo carregado"""
+        if not self.mesh_data:
+            return
+        
+        filepath = self.loader_worker.filepath if self.loader_worker else "desconhecido"
+        filename = os.path.basename(filepath)
+        
+        self.lbl_filename.setText(f"<b>{self.lang.get('sidebar.file')}</b><br>{filename}")
+        self.lbl_vertices.setText(f"<b>{self.lang.get('sidebar.vertices')}</b> {len(self.mesh_data.vertices):,}")
+        self.lbl_faces.setText(f"<b>{self.lang.get('sidebar.faces')}</b> {len(self.mesh_data.faces):,}")
+        self.lbl_edges.setText(f"<b>{self.lang.get('sidebar.edges')}</b> {len(self.mesh_data.edges):,}")
+        
+        bounds = self.mesh_data.bounds
+        width = bounds[1][0] - bounds[0][0]
+        height = bounds[1][1] - bounds[0][1]
+        depth = bounds[1][2] - bounds[0][2]
+        
+        w_label = self.lang.get('sidebar.width')
+        h_label = self.lang.get('sidebar.height')
+        d_label = self.lang.get('sidebar.depth')
+        
+        self.lbl_dimensions.setText(
+            f"<b>{self.lang.get('sidebar.dimensions')}</b><br>"
+            f"{w_label}: {width:.1f} mm<br>"
+            f"{h_label}: {height:.1f} mm<br>"
+            f"{d_label}: {depth:.1f} mm"
+        )
+        
+        if hasattr(self.loader_worker.loader, 'mesh') and self.loader_worker.loader.mesh:
+            mesh = self.loader_worker.loader.mesh
+            if mesh.is_watertight:
+                self.lbl_volume.setText(f"<b>{self.lang.get('sidebar.volume')}</b> {mesh.volume:.1f} mm³")
+            else:
+                self.lbl_volume.setText(f"<b>{self.lang.get('sidebar.volume')}</b> N/A")
+        else:
+            self.lbl_volume.setText(f"<b>{self.lang.get('sidebar.volume')}</b> -")
+        
+        if self.mesh_data.simplified_edge_count < self.mesh_data.original_edge_count:
+            reduction = 100 - (self.mesh_data.simplified_edge_count / self.mesh_data.original_edge_count * 100)
+            self.lbl_simplification.setText(
+                f"<b style='color: #4CAF50;'>{self.lang.get('sidebar.simplified')}</b><br>"
+                f"<span style='font-size: 8px;'>"
+                f"F: {self.mesh_data.original_face_count:,} → {self.mesh_data.simplified_face_count:,}<br>"
+                f"A: {self.mesh_data.original_edge_count:,} → {self.mesh_data.simplified_edge_count:,}<br>"
+                f"<b>-{reduction:.1f}%</b>"
+                f"</span>"
+            )
+        else:
+            self.lbl_simplification.setText(
+                f"<i style='color: #888; font-size: 8px;'>{self.lang.get('sidebar.not_simplified')}</i>"
+            )
     
     def _on_load_error(self, error_msg: str):
         """Callback quando ocorre erro"""
         if self.progress_dialog:
             self.progress_dialog.close()
         
-        QMessageBox.critical(self, "Erro ao Carregar", f"Não foi possível carregar:\n\n{error_msg}")
-        self._set_status("Erro ao carregar arquivo", permanent=True)
+        QMessageBox.critical(
+            self, 
+            self.lang.get("dialogs.error"), 
+            f"{self.lang.get('statusbar.error')}:\n\n{error_msg}"
+        )
+        self._set_status(self.lang.get("statusbar.error"), permanent=True)
     
     def _on_load_canceled(self):
         """Callback quando o carregamento é cancelado"""
@@ -597,61 +883,376 @@ class MainWindow(QMainWindow):
             self.loader_worker.terminate()
             self.loader_worker.wait()
         
-        self._set_status("Carregamento cancelado", timeout=3000)
+        self._set_status(self.lang.get("statusbar.model_removed"), timeout=3000)
     
     def _generate_technical_drawing(self):
         """Gera o desenho técnico"""
         if self.mesh_data is None:
-            QMessageBox.warning(self, "Aviso", "Nenhum modelo carregado.")
+            QMessageBox.warning(
+                self, 
+                self.lang.get("dialogs.warning"), 
+                self.lang.get("dialogs.no_model")
+            )
             return
         
         try:
             from gui.drawing_preview_window import DrawingPreviewWindow
             
-            self._set_status("Gerando desenho técnico...", timeout=0)
+            self._set_status(self.lang.get("statusbar.generating"), timeout=0)
             
-            self.preview_window = DrawingPreviewWindow(self.mesh_data, self)
+            self.preview_window = DrawingPreviewWindow(self.mesh_data, self, self.lang)
             self.preview_window.show()
             
-            self._set_status("✓ Desenho técnico gerado", timeout=5000)
+            self._set_status(self.lang.get("statusbar.drawing_generated"), timeout=5000)
             
         except Exception as e:
             import traceback
             traceback.print_exc()
-            QMessageBox.critical(self, "Erro", f"Erro ao gerar desenho técnico:\n{str(e)}")
-            self._set_status("Erro na geração", permanent=True)
+            QMessageBox.critical(
+                self, 
+                self.lang.get("dialogs.error"), 
+                f"{self.lang.get('statusbar.error')}:\n{str(e)}"
+            )
+            self._set_status(self.lang.get("statusbar.error"), permanent=True)
     
     def _export_image(self):
         """Exporta a vista atual"""
         if self.mesh_data is None:
-            QMessageBox.warning(self, "Aviso", "Nenhum modelo carregado.")
+            QMessageBox.warning(
+                self, 
+                self.lang.get("dialogs.warning"), 
+                self.lang.get("dialogs.no_model")
+            )
             return
+        
+        initial_dir = self.config.get_last_directory()
         
         filepath, _ = QFileDialog.getSaveFileName(
             self,
-            "Exportar Imagem",
-            "modelo_3d.png",
+            self.lang.get("dialogs.export_image"),
+            os.path.join(initial_dir, "modelo_3d.png"),
             "PNG (*.png);;JPEG (*.jpg)"
         )
         
         if filepath:
             try:
+                self.config.set_last_directory(os.path.dirname(filepath))
+                
                 image = self.gl_widget.grabFramebuffer()
                 image.save(filepath)
-                self._set_status(f"✓ Imagem exportada: {os.path.basename(filepath)}", timeout=5000)
+                
+                message = f"{self.lang.get('statusbar.exported')} {os.path.basename(filepath)}"
+                self._set_status(message, timeout=5000)
             except Exception as e:
-                QMessageBox.critical(self, "Erro", f"Erro ao exportar:\n{str(e)}")
+                QMessageBox.critical(
+                    self, 
+                    self.lang.get("dialogs.error"), 
+                    f"{self.lang.get('statusbar.error')}:\n{str(e)}"
+                )
     
     def _show_about(self):
-        """Mostra diálogo sobre"""
-        QMessageBox.about(
-            self,
-            "Sobre Technical Drawing",
-            "<h3>STL to Technical Drawing</h3>"
-            "<p>Gerador automático de desenhos técnicos.</p>"
-            "<p><b>Versão:</b> 1.2.35</p>"
-            "<p><b>Por:</b> Roberto Reis - SE3D | 2018</p>"
-        )
+        """Mostra diálogo sobre com logo, informações e QRCode"""
+        import os
+        from pathlib import Path
+        from PyQt6.QtWidgets import QVBoxLayout, QHBoxLayout, QLabel, QDialog, QPushButton, QTextEdit, QApplication
+        from PyQt6.QtCore import Qt, QTimer
+        from PyQt6.QtGui import QPixmap, QPainter, QColor, QFont, QClipboard
+        
+        class AboutDialog(QDialog):
+            def __init__(self, parent=None):
+                super().__init__(parent)
+                self.setWindowTitle("Sobre o STL2TechnicalDrawing")
+                self.setFixedSize(600, 800)
+                self.setStyleSheet("""
+                    QDialog {
+                        background-color: #f5f5f5;
+                    }
+                    QLabel {
+                        background-color: transparent;
+                    }
+                    QTextEdit {
+                        background-color: transparent;
+                        border: none;
+                    }
+                """)
+                self.copy_button = None
+                self.setup_ui()
+                
+            def setup_ui(self):
+                layout = QVBoxLayout(self)
+                layout.setSpacing(10)
+                layout.setContentsMargins(20, 20, 20, 20)
+                
+                # ========== LOGO SE3D ==========
+                logo_label = QLabel()
+                logo_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                
+                # BUSCA DIRETA PELA MARCA.PNG
+                current_file = Path(__file__)  # main_window.py
+                project_root = current_file.parent.parent  # Subindo 2 níveis: gui/ -> ../
+                
+                # Lista de possíveis locais
+                search_paths = [
+                    Path("marca.png"),  # Diretório atual
+                    project_root / "marca.png",  # Raiz do projeto
+                    Path.cwd() / "marca.png",  # Diretório de trabalho
+                    Path.home() / "Desktop" / "marca.png",  # Desktop
+                ]
+                
+                print("\n🔍 Buscando marca.png:")
+                for path in search_paths:
+                    print(f"  → {path} - {'✅ EXISTE' if path.exists() else '❌ NÃO'}")
+                
+                # Tenta carregar a marca
+                marca_path = None
+                for path in search_paths:
+                    if path.exists():
+                        marca_path = path
+                        print(f"🎯 Usando marca encontrada em: {marca_path}")
+                        break
+                
+                if marca_path:
+                    try:
+                        logo_pixmap = QPixmap(str(marca_path))
+                        if not logo_pixmap.isNull():
+                            print(f"✅ Marca carregada: {logo_pixmap.width()}x{logo_pixmap.height()}")
+                            
+                            # Redimensiona se for muito grande
+                            orig_width = logo_pixmap.width()
+                            orig_height = logo_pixmap.height()
+                            new_width = orig_width // 3  # 1/3 da largura original
+                            new_height = orig_height // 3  # 1/3 da altura original
+
+                            logo_pixmap = logo_pixmap.scaled(
+                                new_width, new_height,
+                                Qt.AspectRatioMode.KeepAspectRatio,
+                                Qt.TransformationMode.SmoothTransformation
+                            )
+                            print(f"📏 Redimensionada para: {logo_pixmap.width()}x{logo_pixmap.height()}")
+                            
+                            logo_label.setPixmap(logo_pixmap)
+                            logo_label.setMinimumHeight(logo_pixmap.height() + 10)
+                        else:
+                            self._create_fallback_logo(logo_label)
+                    except Exception as e:
+                        print(f"❌ Erro ao carregar marca: {e}")
+                        self._create_fallback_logo(logo_label)
+                else:
+                    print("⚠️  marca.png não encontrada em nenhum local!")
+                    self._create_fallback_logo(logo_label)
+                
+                layout.addWidget(logo_label)
+                
+                # Resto do código permanece igual...
+                # ========== INFORMAÇÕES DO PROJETO ==========
+                info_text = QTextEdit()
+                info_text.setReadOnly(True)
+                info_text.setHtml(f"""
+                <div style="text-align: center; font-family: Arial; line-height: 1.6; color: #333;">
+                    <h2 style="color: #2c3e50; margin-top: 0;">STL2TechnicalDrawing</h2>
+                    <p style="font-size: 14px;">
+                        <b>Versão:</b> 2.0.0<br>
+                        <b>Desenvolvido por:</b> Roberto Reis<br>
+                        <b>Empresa:</b> SE3D<br><br>
+                        
+                        <b>Site:</b> <a href="https://www.se3d.com.br" 
+                        style="color: #3498db; text-decoration: none;">
+                            https://www.se3d.com.br
+                        </a><br>
+                        
+                        <b>GitHub:</b> <a href="https://github.com/robertoSreis/TechDraw" 
+                        style="color: #3498db; text-decoration: none;">
+                            https://github.com/robertoSreis/TechDraw
+                        </a><br><br>
+                        
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+                        
+                        <h3 style="color: #2c3e50;">Requisitos Mínimos do Sistema</h3>
+                        <div style="text-align: left; display: inline-block;">
+                        <p style="font-size: 13px;">
+                            <b>Processador:</b><br>
+                            • Mínimo: Dual Core 1.8 GHz<br>
+                            • Recomendado: 2.3 GHz ou superior<br><br>
+                            
+                            <b>Placa de Vídeo:</b><br>
+                            • Mínimo: Intel UHD Graphics 630 (128MB RAM)<br>
+                            • Recomendado: 2GB VRAM dedicada<br><br>
+                            
+                            <b>Memória RAM:</b><br>
+                            • Mínimo: 2GB<br>
+                            • Recomendado: 4GB ou mais<br><br>
+                            
+                            <b>Armazenamento:</b> 500MB livres<br>
+                            <b>Sistema Operacional:</b> Windows 10/11, Linux, macOS
+                        </p>
+                        </div>
+                        
+                        <hr style="border: none; border-top: 1px solid #ddd; margin: 15px 0;">
+                        
+                        <h3 style="color: #2c3e50;">Doações Bitcoin</h3>
+                        <p style="font-family: monospace; font-size: 12px; background-color: #f8f9fa; 
+                        padding: 10px; border-radius: 5px; border: 1px solid #dee2e6;">
+                            bc1qe2guhvt3yhp6v9gngrwegzfvuqq6pnepmvemlz
+                        </p>
+                    </p>
+                </div>
+                """)
+                
+                info_text.setMaximumHeight(400)
+                info_text.setStyleSheet("""
+                    QTextEdit {
+                        background-color: transparent;
+                        border: none;
+                    }
+                """)
+                layout.addWidget(info_text)
+                
+                # ========== QR CODE BITCOIN ==========
+                qr_label = QLabel("QR Code Bitcoin")
+                qr_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                qr_label.setMaximumHeight(180)
+                
+                try:
+                    import qrcode
+                    from io import BytesIO
+                    
+                    btc_address = "bc1qe2guhvt3yhp6v9gngrwegzfvuqq6pnepmvemlz"
+                    
+                    qr = qrcode.QRCode(
+                        version=1,
+                        error_correction=qrcode.constants.ERROR_CORRECT_L,
+                        box_size=6,
+                        border=2,
+                    )
+                    qr.add_data(f"bitcoin:{btc_address}")
+                    qr.make(fit=True)
+                    
+                    img = qr.make_image(fill_color="black", back_color="white")
+                    
+                    buffer = BytesIO()
+                    img.save(buffer, format="PNG")
+                    buffer.seek(0)
+                    
+                    qr_pixmap = QPixmap()
+                    qr_pixmap.loadFromData(buffer.read())
+                    
+                    qr_pixmap = qr_pixmap.scaled(
+                        140, 140, 
+                        Qt.AspectRatioMode.KeepAspectRatio,
+                        Qt.TransformationMode.SmoothTransformation
+                    )
+                    
+                    qr_label.setPixmap(qr_pixmap)
+                    qr_label.setText("")
+                    
+                except ImportError:
+                    qr_label.setText("(Instale 'qrcode[pil]' para exibir QR Code)")
+                    qr_label.setStyleSheet("color: #888; font-style: italic;")
+                
+                layout.addWidget(qr_label)
+                
+                # ========== BOTÃO DE COPIAR ==========
+                self.copy_button = QPushButton("📋 Copiar Endereço BTC")
+                self.copy_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #27ae60;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        font-weight: bold;
+                        font-size: 14px;
+                    }
+                    QPushButton:hover {
+                        background-color: #219653;
+                    }
+                    QPushButton:pressed {
+                        background-color: #1e874b;
+                    }
+                """)
+                self.copy_button.clicked.connect(self.copy_btc_address)
+                layout.addWidget(self.copy_button, alignment=Qt.AlignmentFlag.AlignCenter)
+                
+                # ========== BOTÃO FECHAR ==========
+                close_btn = QPushButton("Fechar")
+                close_btn.clicked.connect(self.accept)
+                close_btn.setStyleSheet("""
+                    QPushButton {
+                        background-color: #7f8c8d;
+                        color: white;
+                        border: none;
+                        padding: 8px 25px;
+                        border-radius: 4px;
+                    }
+                    QPushButton:hover {
+                        background-color: #95a5a6;
+                    }
+                    QPushButton:pressed {
+                        background-color: #6c7b7d;
+                    }
+                """)
+                layout.addWidget(close_btn, alignment=Qt.AlignmentFlag.AlignCenter)
+                
+                # ========== RODAPÉ ==========
+                footer = QLabel("© 2024 SE3D")
+                footer.setAlignment(Qt.AlignmentFlag.AlignCenter)
+                footer.setStyleSheet("color: #7f8c8d; font-size: 12px; margin-top: 10px;")
+                layout.addWidget(footer)
+                
+            def _create_fallback_logo(self, label):
+                """Cria um texto simples SE3D como fallback"""
+                pixmap = QPixmap(400, 80)
+                pixmap.fill(QColor(240, 240, 240))
+                painter = QPainter(pixmap)
+                painter.setFont(QFont("Arial", 36, QFont.Weight.Bold))
+                painter.setPen(QColor(0, 100, 200))
+                painter.drawText(pixmap.rect(), Qt.AlignmentFlag.AlignCenter, "SE3D")
+                painter.end()
+                label.setPixmap(pixmap)
+                
+            def copy_btc_address(self):
+                btc_address = "bc1qe2guhvt3yhp6v9gngrwegzfvuqq6pnepmvemlz"
+                clipboard = QApplication.clipboard()
+                clipboard.setText(btc_address)
+                
+                self.copy_button.setText("✅ Copiado!")
+                self.copy_button.setStyleSheet("""
+                    QPushButton {
+                        background-color: #2ecc71;
+                        color: white;
+                        border: none;
+                        padding: 10px 20px;
+                        border-radius: 5px;
+                        font-weight: bold;
+                        font-size: 14px;
+                    }
+                """)
+                
+                QTimer.singleShot(2000, self.restore_copy_button)
+                
+            def restore_copy_button(self):
+                if self.copy_button:
+                    self.copy_button.setText("📋 Copiar Endereço BTC")
+                    self.copy_button.setStyleSheet("""
+                        QPushButton {
+                            background-color: #27ae60;
+                            color: white;
+                            border: none;
+                            padding: 10px 20px;
+                            border-radius: 5px;
+                            font-weight: bold;
+                            font-size: 14px;
+                        }
+                        QPushButton:hover {
+                            background-color: #219653;
+                        }
+                        QPushButton:pressed {
+                            background-color: #1e874b;
+                        }
+                    """)
+        
+        dialog = AboutDialog(self)
+        dialog.exec()
     
     def dragEnterEvent(self, event):
         """Aceita arrastar arquivos STL"""
@@ -666,12 +1267,41 @@ class MainWindow(QMainWindow):
         for url in event.mimeData().urls():
             filepath = url.toLocalFile()
             if filepath.lower().endswith('.stl'):
+                self.config.set_last_directory(os.path.dirname(filepath))
                 self._load_stl(filepath)
                 break
     
     def closeEvent(self, event):
-        """Limpa threads ao fechar"""
+        """Limpa threads ao fechar e salva configurações"""
+        # Salva estado da janela
+        self.config.set("window.maximized", self.isMaximized())
+        if not self.isMaximized():
+            self.config.set("window.width", self.width())
+            self.config.set("window.height", self.height())
+        
+        # Limpa threads
         if self.loader_worker and self.loader_worker.isRunning():
             self.loader_worker.terminate()
             self.loader_worker.wait()
+        
         event.accept()
+    
+    def _load_view_settings(self):
+        """Carrega configurações de visualização"""
+        settings = self.config.get_view_settings()
+        
+        self.tool_faces.setChecked(settings.get("show_faces", True))
+        self.tool_edges.setChecked(settings.get("show_edges", True))
+        self.tool_grid.setChecked(settings.get("show_grid", True))
+        self.tool_mirror_x.setChecked(settings.get("mirror_x", False))
+        self.tool_mirror_y.setChecked(settings.get("mirror_y", False))
+        self.tool_mirror_z.setChecked(settings.get("mirror_z", False))
+        
+        # Aplica espelhamento no gl_widget
+        self.gl_widget.set_mirror_x(settings.get("mirror_x", False))
+        self.gl_widget.set_mirror_y(settings.get("mirror_y", False))
+        self.gl_widget.set_mirror_z(settings.get("mirror_z", False))
+        
+        # ✅ Aplica cor do modelo do config
+        color = self.config.get_model_color()
+        self._apply_model_color(color)
