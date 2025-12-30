@@ -13,7 +13,7 @@
 
 [English](#english) | [Português](#português)
 
-![Screenshot](docs/screenshot.png)
+![Screenshot](/screenshot.png)
 
 </div>
 
